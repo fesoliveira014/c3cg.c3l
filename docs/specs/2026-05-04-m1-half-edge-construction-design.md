@@ -83,12 +83,12 @@ fn void HalfEdgeMesh.destroy(&self);
 **Phase 2 — Allocate topology arrays:**
 - `face_count = indices.len / 3`
 - `half_edge_count = indices.len` (3 per face)
-- Allocate via `alloc::new_array(alloc, ...)`:
+- Allocate via `mem::alloc::new_array(alloc, ...)`:
   - `HalfEdge[half_edge_count]` → `mesh.half_edges`
   - `HalfEdgeFace[face_count]` → `mesh.faces`
   - `HalfEdgeVertex[positions.len]` → `mesh.vertices`
 - Initialize vertices: `for (uint i = 0; i < positions.len; i++) vertices[i].half_edge = INVALID_HE;`
-- Copy positions: `alloc::new_array(alloc, Vec3f, positions.len)` + element copy
+- Copy positions: `mem::alloc::new_array(alloc, Vec3f, positions.len)` + element copy
 - Zero-fill `normals` and `uvs` as empty slices
 - Initialize `HashMap{int[<2>], HeIndex} edge_map` with `edge_map.init(alloc)`
 
@@ -129,7 +129,7 @@ Construction allocates arrays and a HashMap. If a fault occurs mid-construction 
 
 ```c3
 // Immediately after each allocation:
-half_edges = alloc::new_array(alloc, HalfEdge, half_edge_count);
+half_edges = mem::alloc::new_array(alloc, HalfEdge, half_edge_count);
 defer free(half_edges);  // freed on any exit (fault or success)
 ```
 
@@ -142,9 +142,9 @@ fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indic
     // Validate first (no allocations yet)
 
     HalfEdgeMesh mesh;
-    mesh.half_edges = alloc::new_array(alloc, HalfEdge, half_edge_count);
+    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, half_edge_count);
     defer catch free(mesh.half_edges);
-    mesh.faces = alloc::new_array(alloc, HalfEdgeFace, face_count);
+    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, face_count);
     defer catch free(mesh.faces);
     // ... etc
 
@@ -178,7 +178,7 @@ Returned when `normals.len > 0 && normals.len != positions.len` or `uvs.len > 0 
 ### `from_triangles_with_attrs`
 
 Same algorithm as `from_triangles` but:
-- Instead of zero-filling `normals` and `uvs` (Phase 2), copies them from the parameters: `alloc::new_array(alloc, Vec3f, positions.len)` for normals, `alloc::new_array(alloc, Vec2f, positions.len)` for uvs, then element-wise copy. If either input array is empty, leave the corresponding mesh field as an empty slice.
+- Instead of zero-filling `normals` and `uvs` (Phase 2), copies them from the parameters: `mem::alloc::new_array(alloc, Vec3f, positions.len)` for normals, `mem::alloc::new_array(alloc, Vec2f, positions.len)` for uvs, then element-wise copy. If either input array is empty, leave the corresponding mesh field as an empty slice.
 - Validation first: check `ATTRIBUTE_COUNT_MISMATCH` for normals and uvs length vs positions.
 
 ### `from_polygons`
@@ -307,9 +307,9 @@ Tests on a tetrahedron mesh:
 
 ## Allocator Convention
 
-All constructors take `Allocator alloc` as first parameter. Internal allocations use `alloc::new_array(alloc, T, n)` and `map.init(alloc)`. Callers pass `mem` (standard heap allocator), `tmem` (temp allocator), or a custom allocator.
+All constructors take `Allocator alloc` as first parameter. Internal allocations use `mem::alloc::new_array(alloc, T, n)` and `map.init(alloc)`. Callers pass `mem` (standard heap allocator), `tmem` (temp allocator), or a custom allocator.
 
-Destroy uses bare `free()` which frees through the context allocator — the allocator used at construction time must be the one active when `destroy` is called. For heap-allocated meshes, this is naturally `mem`. For temp-allocated meshes, `destroy` is unnecessary (pool handles cleanup).
+Destroy uses bare `free()` on each owned slice. This matches C3 0.7.11 allocation metadata: arrays allocated with `mem::alloc::new_array(alloc, T, n)` can be released with `free(slice)`. Callers still own the lifecycle and should call `mesh.destroy()` exactly once for heap/custom-allocated meshes. Temp-allocated meshes inside `@pool()` do not need explicit destroy unless the caller wants early release.
 
 ## Verification
 
@@ -323,7 +323,7 @@ Expected: static library created + all tests pass (2 existing + ~15 new).
 
 - Cross-module method pattern: `cg::half_edge` declares methods on `cg::HalfEdgeMesh`. Verified working in M0.
 - `HashMap{int[<2>], HeIndex}` uses vector keys for edge pairing. Verified on c3c 0.7.11 — `HashMap{int[<2>], T}` compiles and works with vector-type keys.
-- `alloc::new_array(alloc, T, n)` for explicit-allocator array allocation.
+- `mem::alloc::new_array(alloc, T, n)` for explicit-allocator array allocation.
 - `*self = {}` zero-clears the struct in `destroy`, making double-free safe.
 - `vertex.half_edge` set to first outgoing edge encountered, never overwritten — deterministic one-ring walks (per architecture §5.2).
 - `from_polygons` shares the same twin-pairing pass as `from_triangles` — only the face-traversal loop differs (CSR vs fixed 3).
