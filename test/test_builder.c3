@@ -99,3 +99,85 @@ fn void test_tetrahedron_twins_are_paired() @test
         assert(mesh.half_edges[twin].twin == (HeIndex)(int)i);
     }
 }
+
+const Vec3f[4] TET_NORMALS = {
+    { 0, 0, 1 },
+    { 0, 1, 0 },
+    { 1, 0, 0 },
+    { 1, 1, 1 },
+};
+
+const Vec2f[4] TET_UVS = {
+    { 0, 0 },
+    { 1, 0 },
+    { 0, 1 },
+    { 1, 1 },
+};
+
+fn void test_tetrahedron_with_attrs_copies_normals_and_uvs() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles_with_attrs(
+        mem, TET_POSITIONS[..], TET_NORMALS[..], TET_UVS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    assert(mesh.positions.len == 4);
+    assert(mesh.normals.len == 4);
+    assert(mesh.uvs.len == 4);
+    assert(mesh.half_edges.len == 12);
+
+    assert(mesh.normals[0] == TET_NORMALS[0]);
+    assert(mesh.normals[1] == TET_NORMALS[1]);
+    assert(mesh.normals[2] == TET_NORMALS[2]);
+    assert(mesh.normals[3] == TET_NORMALS[3]);
+    assert(mesh.uvs[0] == TET_UVS[0]);
+    assert(mesh.uvs[1] == TET_UVS[1]);
+    assert(mesh.uvs[2] == TET_UVS[2]);
+    assert(mesh.uvs[3] == TET_UVS[3]);
+}
+
+fn void test_empty_attrs_stay_empty() @test
+{
+    Vec3f[] no_normals = {};
+    Vec2f[] no_uvs = {};
+    HalfEdgeMesh mesh = half_edge::from_triangles_with_attrs(
+        mem, TET_POSITIONS[..], no_normals, no_uvs, TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    assert(mesh.normals.len == 0);
+    assert(mesh.uvs.len == 0);
+    assert(mesh.half_edges.len == 12);
+}
+
+fn void test_normals_count_mismatch_fault() @test
+{
+    Vec3f[2] bad_normals = { { 0, 0, 1 }, { 0, 1, 0 } };
+    if (catch err = half_edge::from_triangles_with_attrs(
+        mem, TET_POSITIONS[..], bad_normals[..], {}, TET_INDICES[..])) {
+        assert(err == cg::ATTRIBUTE_COUNT_MISMATCH);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_uvs_count_mismatch_fault() @test
+{
+    Vec2f[2] bad_uvs = { { 0, 0 }, { 1, 1 } };
+    if (catch err = half_edge::from_triangles_with_attrs(
+        mem, TET_POSITIONS[..], {}, bad_uvs[..], TET_INDICES[..])) {
+        assert(err == cg::ATTRIBUTE_COUNT_MISMATCH);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_destroy_zeroes_mesh() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    mesh.destroy();
+    assert(mesh.positions.len == 0);
+    assert(mesh.half_edges.len == 0);
+    assert(mesh.faces.len == 0);
+    assert(mesh.vertices.len == 0);
+    assert(mesh.normals.len == 0);
+    assert(mesh.uvs.len == 0);
+}

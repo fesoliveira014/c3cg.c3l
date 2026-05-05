@@ -15,8 +15,22 @@ fn void HalfEdgeMesh.destroy(&self)
 
 fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indices)
 {
+    Vec3f[] no_normals = {};
+    Vec2f[] no_uvs = {};
+    return from_triangles_with_attrs(alloc, positions, no_normals, no_uvs, indices);
+}
+
+fn HalfEdgeMesh? from_triangles_with_attrs(
+    Allocator alloc,
+    Vec3f[] positions,
+    Vec3f[] normals,
+    Vec2f[] uvs,
+    uint[] indices)
+{
     if (positions.len == 0 || indices.len == 0) return cg::EMPTY_INPUT~;
     if (indices.len % 3 != 0) return cg::INVALID_TRIANGLE_INDEX_COUNT~;
+    if (normals.len > 0 && normals.len != positions.len) return cg::ATTRIBUTE_COUNT_MISMATCH~;
+    if (uvs.len > 0 && uvs.len != positions.len) return cg::ATTRIBUTE_COUNT_MISMATCH~;
     foreach (index : indices) {
         if (index >= positions.len) return cg::INDEX_OUT_OF_RANGE~;
     }
@@ -34,9 +48,24 @@ fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indic
     mesh.positions = mem::alloc::new_array(alloc, Vec3f, positions.len);
     defer catch free(mesh.positions);
 
+    if (normals.len > 0) {
+        mesh.normals = mem::alloc::new_array(alloc, Vec3f, normals.len);
+        defer catch free(mesh.normals);
+    }
+    if (uvs.len > 0) {
+        mesh.uvs = mem::alloc::new_array(alloc, Vec2f, uvs.len);
+        defer catch free(mesh.uvs);
+    }
+
     for (usz i = 0; i < mesh.vertices.len; i++) {
         mesh.vertices[i].half_edge = cg::INVALID_HE;
         mesh.positions[i] = positions[i];
+    }
+    for (usz i = 0; i < normals.len; i++) {
+        mesh.normals[i] = normals[i];
+    }
+    for (usz i = 0; i < uvs.len; i++) {
+        mesh.uvs[i] = uvs[i];
     }
 
     HashMap{int[<2>], HeIndex} edge_map;
@@ -79,16 +108,6 @@ fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indic
 
     edge_map.free();
     return mesh;
-}
-
-fn HalfEdgeMesh? from_triangles_with_attrs(
-    Allocator alloc,
-    Vec3f[] positions,
-    Vec3f[] normals,
-    Vec2f[] uvs,
-    uint[] indices)
-{
-    return cg::EMPTY_INPUT~;
 }
 
 fn HalfEdgeMesh? from_polygons(Allocator alloc, Vec3f[] positions, uint[] face_offsets, uint[] face_indices)
