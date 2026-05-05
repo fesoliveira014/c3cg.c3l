@@ -1,1 +1,25 @@
 module cg;
+
+struct HalfEdge {
+    VertexIndex origin;
+    HeIndex     next;
+    HeIndex     twin;
+    FaceIndex   face;
+}
+
+struct HalfEdgeFace {
+    HeIndex half_edge;
+}
+
+struct HalfEdgeVertex {
+    HeIndex half_edge;
+}
+
+struct HalfEdgeMesh {
+    HalfEdge[]       half_edges;
+    HalfEdgeFace[]   faces;
+    HalfEdgeVertex[] vertices;
+    Vec3f[]          positions;
+    Vec3f[]          normals;
+    Vec2f[]          uvs;
+}
