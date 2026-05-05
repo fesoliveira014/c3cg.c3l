@@ -174,7 +174,7 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 
 | Milestone | What | Status |
 |-----------|------|--------|
-| M0 | Project scaffolding — types, faults, struct stubs | Not started |
+| M0 | Project scaffolding — types, faults, struct stubs | ✅ Complete |
 | M1 | Half-edge construction (`from_triangles`) + topology queries | Not started |
 | M2 | Walks + validation | Not started |
 | M3 | Rendering data extraction | Not started |
@@ -192,14 +192,16 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 
 Each milestone = commit(s) with tests. `c3c build && c3c test` green at every boundary.
 
-## Open Questions (Resolve in M0)
+## Open Questions (Resolved in M0)
 
-These need `c3-expert` verification before coding:
-- Vector type spelling: `float[<3>]` vs `std::math::Vec3f`
-- Methods on imported types: can `fn Ret HalfEdgeMesh.method()` be declared from `cg::half_edge` for a type in `cg`?
-- HashMap instantiation syntax in target C3 release
-- Allocator-passing convention (explicit param vs context allocator)
-- `*self = {}` zero-clear syntax
-- Test annotations (`@test`) and assertion semantics
-- `project.json` shape for library vs application
-- Submodule visibility (can `cg::voronoi` see `cg::half_edge` operations through import?)
+These were verified with `c3-expert` at c3c 0.7.11:
+- [x] Vector type spelling: `float[<3>]` — used with local aliases (`Vec2f`, etc.)
+- [x] Methods on imported types: confirmed working with `smoke/smoke.c3` + test
+- [x] `project.json` shape for library — `static-lib` + `debug` + `release` targets
+- [x] Test annotations (`@test`) — after params in test `.c3` files, `assert()` per style §11
+
+Deferred to later milestones:
+- HashMap instantiation syntax — needed in M1 (twin-pairing)
+- Allocator-passing convention — needed in M1 (construction)
+- `*self = {}` zero-clear syntax — needed in M1 (`destroy`)
+- Submodule visibility — needed in M1+
