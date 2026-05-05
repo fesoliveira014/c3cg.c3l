@@ -1,0 +1,25 @@
+{
+  "langrev": "1",
+  "warnings": ["no-unused"],
+  "sources": [
+    "c3cg.c3i",
+    "types.c3i",
+    "faults.c3i",
+    "half_edge_mesh.c3i",
+    "smoke/smoke.c3"
+  ],
+  "test-sources": ["test/**"],
+  "targets": {
+    "static-lib": {
+      "type": "static-lib"
+    },
+    "debug": {
+      "type": "static-lib",
+      "opt": "O0"
+    },
+    "release": {
+      "type": "static-lib",
+      "opt": "O3"
+    }
+  }
+}
