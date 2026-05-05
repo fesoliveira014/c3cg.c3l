@@ -6,7 +6,9 @@
     "types.c3i",
     "faults.c3i",
     "half_edge_mesh.c3i",
-    "smoke/smoke.c3"
+    "smoke/smoke.c3",
+    "half_edge/builder.c3",
+    "half_edge/topology.c3"
   ],
   "test-sources": ["test/**"],
   "targets": {

@@ -4,7 +4,9 @@
     "c3cg.c3i",
     "types.c3i",
     "faults.c3i",
-    "half_edge_mesh.c3i"
+    "half_edge_mesh.c3i",
+    "half_edge/builder.c3",
+    "half_edge/topology.c3"
   ],
   "linklib-dir" : "linked-libs",
   "targets" : {
