@@ -1,5 +1,6 @@
 module cg::half_edge;
 import cg;
+import std::collections::map;
 
 fn void HalfEdgeMesh.destroy(&self)
 {
@@ -38,6 +39,10 @@ fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indic
         mesh.positions[i] = positions[i];
     }
 
+    HashMap{int[<2>], HeIndex} edge_map;
+    edge_map.init(alloc);
+    defer catch edge_map.free();
+
     for (usz face = 0; face < face_count; face++) {
         usz base = face * 3;
         mesh.faces[face].half_edge = (HeIndex)(int)base;
@@ -46,11 +51,16 @@ fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indic
             usz he_index = base + local;
             usz next_index = base + ((local + 1) % 3);
             uint origin_index = indices[he_index];
+            uint dest_index = indices[next_index];
 
             mesh.half_edges[he_index].origin = (VertexIndex)(int)origin_index;
             mesh.half_edges[he_index].next = (HeIndex)(int)next_index;
             mesh.half_edges[he_index].twin = cg::INVALID_HE;
             mesh.half_edges[he_index].face = (FaceIndex)(int)face;
+
+            int[<2>] key = { (int)origin_index, (int)dest_index };
+            if (edge_map.has_key(key)) return cg::DUPLICATE_HALF_EDGE~;
+            edge_map[key] = (HeIndex)(int)he_index;
 
             if (mesh.vertices[origin_index].half_edge == cg::INVALID_HE) {
                 mesh.vertices[origin_index].half_edge = (HeIndex)(int)he_index;
@@ -58,6 +68,16 @@ fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indic
         }
     }
 
+    for (usz he_index = 0; he_index < half_edge_count; he_index++) {
+        VertexIndex from_v = mesh.half_edges[he_index].origin;
+        VertexIndex to_v = mesh.half_edges[mesh.half_edges[he_index].next].origin;
+        int[<2>] reverse_key = { (int)to_v, (int)from_v };
+        if (try twin_he = edge_map[reverse_key]) {
+            mesh.half_edges[he_index].twin = twin_he;
+        }
+    }
+
+    edge_map.free();
     return mesh;
 }
 

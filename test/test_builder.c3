@@ -74,3 +74,28 @@ fn void test_tetrahedron_counts() @test
     assert(mesh.positions[2] == TET_POSITIONS[2]);
     assert(mesh.positions[3] == TET_POSITIONS[3]);
 }
+
+fn void test_duplicate_directed_edge_fault() @test
+{
+    uint[6] indices = {
+        0, 1, 2,
+        0, 1, 3,
+    };
+    if (catch err = half_edge::from_triangles(mem, TET_POSITIONS[..], indices[..])) {
+        assert(err == cg::DUPLICATE_HALF_EDGE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_tetrahedron_twins_are_paired() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    for (usz i = 0; i < mesh.half_edges.len; i++) {
+        HeIndex twin = mesh.half_edges[i].twin;
+        assert(twin != cg::INVALID_HE);
+        assert(mesh.half_edges[twin].twin == (HeIndex)(int)i);
+    }
+}
