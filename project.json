@@ -8,7 +8,9 @@
     "src/half_edge_mesh.c3i",
     "smoke/smoke.c3",
     "src/half_edge/builder.c3",
-    "src/half_edge/topology.c3"
+    "src/half_edge/topology.c3",
+    "src/half_edge/walks.c3",
+    "src/half_edge/validate.c3"
   ],
   "test-sources": ["test/**"],
   "targets": {

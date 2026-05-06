@@ -6,7 +6,9 @@
     "src/faults.c3i",
     "src/half_edge_mesh.c3i",
     "src/half_edge/builder.c3",
-    "src/half_edge/topology.c3"
+    "src/half_edge/topology.c3",
+    "src/half_edge/walks.c3",
+    "src/half_edge/validate.c3"
   ],
   "linklib-dir" : "linked-libs",
   "targets" : {
