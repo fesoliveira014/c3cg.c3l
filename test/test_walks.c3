@@ -232,3 +232,130 @@ fn void test_vertex_walk_output_buffer_too_small() @test
         unreachable();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Validation tests
+// ---------------------------------------------------------------------------
+
+fn void test_validate_tetrahedron() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+}
+
+fn void test_validate_single_triangle_boundary() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+}
+
+fn void test_validate_polygon_quad() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+}
+
+fn void test_validate_empty_topology_fault() @test
+{
+    HalfEdgeMesh mesh;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_TOPOLOGY);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_bad_origin_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.half_edges[0].origin = 99;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_VERTEX_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_bad_next_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.half_edges[0].next = 99;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_HALF_EDGE_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_bad_face_reference_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.half_edges[0].face = 99;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_FACE_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_bad_face_half_edge_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.faces[0].half_edge = 99;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_HALF_EDGE_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_bad_vertex_half_edge_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.vertices[0].half_edge = 99;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_HALF_EDGE_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_negative_next_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.half_edges[0].next = cg::INVALID_HE;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_HALF_EDGE_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_negative_origin_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.half_edges[0].origin = cg::INVALID_VERTEX;
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_VERTEX_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
