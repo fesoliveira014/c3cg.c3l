@@ -359,3 +359,83 @@ fn void test_validate_negative_origin_fault() @test
         unreachable();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Twin validation tests
+// ---------------------------------------------------------------------------
+
+fn void test_validate_bad_twin_roundtrip_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    HeIndex twin = mesh.half_edges[0].twin;
+    mesh.half_edges[twin].twin = 1;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_TWIN);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_bad_twin_endpoints_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    HeIndex twin = mesh.half_edges[0].twin;
+    mesh.half_edges[twin].next = mesh.half_edges[0].next;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_TWIN);
+    } else {
+        unreachable();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Face-cycle validation tests
+// ---------------------------------------------------------------------------
+
+fn void test_validate_bad_face_cycle_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    mesh.half_edges[1].face = 1;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_FACE_CYCLE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_non_closing_face_cycle_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+
+    mesh.half_edges[2].next = 1;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_FACE_CYCLE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_degree_too_small_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+
+    mesh.half_edges[0].next = 0;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_FACE_CYCLE);
+    } else {
+        unreachable();
+    }
+}

@@ -48,5 +48,38 @@ fn void? HalfEdgeMesh.validate(&self)
         if ((usz)origin != i) return cg::INVALID_VERTEX_REFERENCE~;
     }
 
+    // Reference-bound checks above guarantee .next and .twin dereferences are in range.
+    for (usz i = 0; i < self.half_edges.len; i++) {
+        HeIndex he_index = (HeIndex)(int)i;
+        HalfEdge he = self.half_edges[i];
+        if (he.twin == cg::INVALID_HE) continue;
+
+        HalfEdge twin = self.half_edges[he.twin];
+        if (twin.twin != he_index) return cg::INVALID_TWIN~;
+
+        VertexIndex he_to = self.half_edges[he.next].origin;
+        VertexIndex twin_to = self.half_edges[twin.next].origin;
+        if (he.origin != twin_to) return cg::INVALID_TWIN~;
+        if (he_to != twin.origin) return cg::INVALID_TWIN~;
+    }
+
+    for (usz face_index = 0; face_index < self.faces.len; face_index++) {
+        FaceIndex face = (FaceIndex)(int)face_index;
+        HeIndex start = self.faces[face_index].half_edge;
+        HeIndex cursor = start;
+        usz degree = 0;
+
+        while (true) {
+            if (degree >= self.half_edges.len) return cg::INVALID_FACE_CYCLE~;
+            if (self.half_edges[cursor].face != face) return cg::INVALID_FACE_CYCLE~;
+            degree++;
+
+            cursor = self.half_edges[cursor].next;
+            if (cursor == start) break;
+        }
+
+        if (degree < 3) return cg::INVALID_FACE_CYCLE~;
+    }
+
     return;
 }
