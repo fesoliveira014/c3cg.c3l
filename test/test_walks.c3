@@ -439,3 +439,35 @@ fn void test_validate_degree_too_small_fault() @test
         unreachable();
     }
 }
+
+fn void test_validate_bad_vertex_canonical_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    assert(mesh.half_edges[1].origin != 0);
+    mesh.vertices[0].half_edge = 1;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::INVALID_VERTEX_REFERENCE);
+    } else {
+        unreachable();
+    }
+}
+
+fn void test_validate_attribute_mismatch_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles_with_attrs(
+        mem, TET_POSITIONS[..], TET_NORMALS[..], TET_UVS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    Vec3f[] original_normals = mesh.normals;
+    mesh.normals = original_normals[0..2];
+    defer mesh.normals = original_normals;
+
+    if (catch err = mesh.validate()) {
+        assert(err == cg::ATTRIBUTE_COUNT_MISMATCH);
+    } else {
+        unreachable();
+    }
+}
