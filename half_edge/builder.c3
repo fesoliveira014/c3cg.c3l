@@ -112,5 +112,79 @@ fn HalfEdgeMesh? from_triangles_with_attrs(
 
 fn HalfEdgeMesh? from_polygons(Allocator alloc, Vec3f[] positions, uint[] face_offsets, uint[] face_indices)
 {
-    return cg::EMPTY_INPUT~;
+    if (positions.len == 0 || face_offsets.len < 2 || face_indices.len == 0) return cg::EMPTY_INPUT~;
+    if (face_offsets[0] != 0) return cg::INDEX_OUT_OF_RANGE~;
+    if (face_offsets[face_offsets.len - 1] != face_indices.len) return cg::INDEX_OUT_OF_RANGE~;
+
+    usz face_count = face_offsets.len - 1;
+    usz half_edge_count = face_indices.len;
+
+    for (usz f = 0; f < face_count; f++) {
+        usz start = face_offsets[f];
+        usz end = face_offsets[f + 1];
+        if (end < start) return cg::INDEX_OUT_OF_RANGE~;
+        if (end - start < 3) return cg::DEGENERATE_INPUT~;
+    }
+
+    foreach (index : face_indices) {
+        if (index >= positions.len) return cg::INDEX_OUT_OF_RANGE~;
+    }
+
+    HalfEdgeMesh mesh;
+    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, half_edge_count);
+    defer catch free(mesh.half_edges);
+    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, face_count);
+    defer catch free(mesh.faces);
+    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, positions.len);
+    defer catch free(mesh.vertices);
+    mesh.positions = mem::alloc::new_array(alloc, Vec3f, positions.len);
+    defer catch free(mesh.positions);
+
+    for (usz i = 0; i < mesh.vertices.len; i++) {
+        mesh.vertices[i].half_edge = cg::INVALID_HE;
+        mesh.positions[i] = positions[i];
+    }
+
+    HashMap{int[<2>], HeIndex} edge_map;
+    edge_map.init(alloc);
+    defer catch edge_map.free();
+
+    for (usz face = 0; face < face_count; face++) {
+        usz start = face_offsets[face];
+        usz end = face_offsets[face + 1];
+        usz degree = end - start;
+        mesh.faces[face].half_edge = (HeIndex)(int)start;
+
+        for (usz local = 0; local < degree; local++) {
+            usz he_index = start + local;
+            usz next_index = start + ((local + 1) % degree);
+            uint origin_index = face_indices[he_index];
+            uint dest_index = face_indices[next_index];
+
+            mesh.half_edges[he_index].origin = (VertexIndex)(int)origin_index;
+            mesh.half_edges[he_index].next = (HeIndex)(int)next_index;
+            mesh.half_edges[he_index].twin = cg::INVALID_HE;
+            mesh.half_edges[he_index].face = (FaceIndex)(int)face;
+
+            int[<2>] key = { (int)origin_index, (int)dest_index };
+            if (edge_map.has_key(key)) return cg::DUPLICATE_HALF_EDGE~;
+            edge_map[key] = (HeIndex)(int)he_index;
+
+            if (mesh.vertices[origin_index].half_edge == cg::INVALID_HE) {
+                mesh.vertices[origin_index].half_edge = (HeIndex)(int)he_index;
+            }
+        }
+    }
+
+    for (usz he_index = 0; he_index < half_edge_count; he_index++) {
+        VertexIndex from_v = mesh.half_edges[he_index].origin;
+        VertexIndex to_v = mesh.half_edges[mesh.half_edges[he_index].next].origin;
+        int[<2>] reverse_key = { (int)to_v, (int)from_v };
+        if (try twin_he = edge_map[reverse_key]) {
+            mesh.half_edges[he_index].twin = twin_he;
+        }
+    }
+
+    edge_map.free();
+    return mesh;
 }

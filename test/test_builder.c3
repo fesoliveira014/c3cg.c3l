@@ -181,3 +181,92 @@ fn void test_destroy_zeroes_mesh() @test
     assert(mesh.normals.len == 0);
     assert(mesh.uvs.len == 0);
 }
+
+fn void test_polygon_quad() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 1);
+    assert(mesh.half_edges.len == 4);
+    assert(mesh.positions.len == 4);
+    assert(mesh.vertices.len == 4);
+    assert(mesh.normals.len == 0);
+    assert(mesh.uvs.len == 0);
+    assert(mesh.half_edges[0].next == 1);
+    assert(mesh.half_edges[1].next == 2);
+    assert(mesh.half_edges[2].next == 3);
+    assert(mesh.half_edges[3].next == 0);
+    assert(mesh.half_edges[0].origin == 0);
+    assert(mesh.half_edges[1].origin == 1);
+    assert(mesh.half_edges[2].origin == 2);
+    assert(mesh.half_edges[3].origin == 3);
+    assert(mesh.faces[0].half_edge == 0);
+}
+
+fn void test_polygon_empty_offsets_fault() @test
+{
+    Vec3f[4] pos = { { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 } };
+    uint[] offsets = {};
+    uint[4] indices = { 0, 1, 2, 3 };
+    if (catch err = half_edge::from_polygons(mem, pos[..], offsets, indices[..])) {
+        assert(err == cg::EMPTY_INPUT);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_polygon_bad_first_offset_fault() @test
+{
+    Vec3f[4] pos = { { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 } };
+    uint[2] offsets = { 1, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    if (catch err = half_edge::from_polygons(mem, pos[..], offsets[..], indices[..])) {
+        assert(err == cg::INDEX_OUT_OF_RANGE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_polygon_degenerate_face_fault() @test
+{
+    Vec3f[4] pos = { { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 } };
+    uint[2] offsets = { 0, 2 };
+    uint[2] indices = { 0, 1 };
+    if (catch err = half_edge::from_polygons(mem, pos[..], offsets[..], indices[..])) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_polygon_index_out_of_range_fault() @test
+{
+    Vec3f[3] pos = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 } };
+    uint[2] offsets = { 0, 3 };
+    uint[3] indices = { 0, 1, 99 };
+    if (catch err = half_edge::from_polygons(mem, pos[..], offsets[..], indices[..])) {
+        assert(err == cg::INDEX_OUT_OF_RANGE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_polygon_offset_mismatch_fault() @test
+{
+    Vec3f[4] pos = { { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 } };
+    uint[2] offsets = { 0, 5 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    if (catch err = half_edge::from_polygons(mem, pos[..], offsets[..], indices[..])) {
+        assert(err == cg::INDEX_OUT_OF_RANGE);
+        return;
+    }
+    unreachable();
+}
