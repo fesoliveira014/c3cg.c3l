@@ -74,3 +74,161 @@ fn void test_face_walk_output_buffer_too_small() @test
         unreachable();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Vertex one-ring tests
+// ---------------------------------------------------------------------------
+
+fn void test_tetrahedron_vertex_one_ring_outgoing_degree_three() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    for (usz v = 0; v < mesh.vertices.len; v++) {
+        HeIndex[3] out;
+        int count = mesh.vertex_one_ring_outgoing((VertexIndex)(int)v, out[..])!!;
+        assert(count == 3);
+        for (int i = 0; i < count; i++) {
+            assert(out[i] != cg::INVALID_HE);
+            assert(mesh.from_vertex(out[i]) == (VertexIndex)(int)v);
+        }
+    }
+}
+
+fn void test_tetrahedron_vertex_one_ring_faces_degree_three() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    for (usz v = 0; v < mesh.vertices.len; v++) {
+        FaceIndex[3] out;
+        int count = mesh.vertex_one_ring_faces((VertexIndex)(int)v, out[..])!!;
+        assert(count == 3);
+        for (int i = 0; i < count; i++) {
+            assert(out[i] != cg::INVALID_FACE);
+        }
+    }
+}
+
+// Closed bipyramid-like mesh with vertex 0 having degree 5
+const Vec3f[7] DEGREE_FIVE_POSITIONS = {
+    { 0, 0, 1 },
+    { 1, 0, 0 },
+    { 0.309016, 0.951057, 0 },
+    { -0.809017, 0.587785, 0 },
+    { -0.809017, -0.587785, 0 },
+    { 0.309016, -0.951057, 0 },
+    { 0, 0, -1 },
+};
+
+const uint[30] DEGREE_FIVE_INDICES = {
+    0, 1, 2,
+    0, 2, 3,
+    0, 3, 4,
+    0, 4, 5,
+    0, 5, 1,
+    6, 2, 1,
+    6, 3, 2,
+    6, 4, 3,
+    6, 5, 4,
+    6, 1, 5,
+};
+
+fn void test_degree_five_vertex_one_ring() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, DEGREE_FIVE_POSITIONS[..], DEGREE_FIVE_INDICES[..])!!;
+    defer mesh.destroy();
+
+    HeIndex[5] outgoing;
+    FaceIndex[5] faces;
+
+    int outgoing_count = mesh.vertex_one_ring_outgoing(0, outgoing[..])!!;
+    int face_count = mesh.vertex_one_ring_faces(0, faces[..])!!;
+
+    assert(outgoing_count == 5);
+    assert(face_count == 5);
+    for (int i = 0; i < outgoing_count; i++) {
+        assert(mesh.from_vertex(outgoing[i]) == 0);
+    }
+}
+
+fn void test_boundary_vertex_walk_stops_cleanly() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+
+    HeIndex[3] out;
+    int count = mesh.vertex_one_ring_outgoing(0, out[..])!!;
+
+    assert(count >= 1);
+    assert(count <= 3);
+    assert(out[0] == mesh.vertices[0].half_edge);
+    for (int i = 0; i < count; i++) {
+        assert(mesh.from_vertex(out[i]) == 0);
+    }
+}
+
+fn void test_boundary_vertex_one_ring_faces() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+
+    FaceIndex[3] faces;
+    int count = mesh.vertex_one_ring_faces(0, faces[..])!!;
+
+    assert(count >= 1);
+    assert(count <= 3);
+    for (int i = 0; i < count; i++) {
+        assert(faces[i] != cg::INVALID_FACE);
+    }
+}
+
+fn void test_isolated_vertex_one_ring_zero() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
+    defer mesh.destroy();
+
+    mesh.vertices[0].half_edge = cg::INVALID_HE;
+
+    HeIndex[1] outgoing;
+    FaceIndex[1] faces;
+    assert(mesh.vertex_one_ring_outgoing(0, outgoing[..])!! == 0);
+    assert(mesh.vertex_one_ring_faces(0, faces[..])!! == 0);
+}
+
+fn void test_vertex_one_ring_deterministic() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    HeIndex[3] first;
+    HeIndex[3] second;
+    int first_count = mesh.vertex_one_ring_outgoing(0, first[..])!!;
+    int second_count = mesh.vertex_one_ring_outgoing(0, second[..])!!;
+
+    assert(first_count == second_count);
+    for (int i = 0; i < first_count; i++) {
+        assert(first[i] == second[i]);
+    }
+}
+
+fn void test_vertex_walk_output_buffer_too_small() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    HeIndex[2] outgoing;
+    FaceIndex[2] faces;
+
+    if (catch err = mesh.vertex_one_ring_outgoing(0, outgoing[..])) {
+        assert(err == cg::OUTPUT_BUFFER_TOO_SMALL);
+    } else {
+        unreachable();
+    }
+
+    if (catch err = mesh.vertex_one_ring_faces(0, faces[..])) {
+        assert(err == cg::OUTPUT_BUFFER_TOO_SMALL);
+    } else {
+        unreachable();
+    }
+}
