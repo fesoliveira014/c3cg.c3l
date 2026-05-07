@@ -81,7 +81,8 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
     defer catch free(data.normals);
 
     if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE ||
-        options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO) {
+        options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO ||
+        options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
         data.uvs = mem::alloc::new_array(alloc, Vec2f, mesh.positions.len);
     } else {
         data.uvs = mem::alloc::new_array(alloc, Vec2f, 0);
@@ -105,6 +106,8 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
         copy_source_uvs(mesh, data.uvs);
     } else if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO) {
         copy_or_zero_source_uvs(mesh, data.uvs);
+    } else if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
+        project_planar_uvs(mesh, alloc, data.uvs)!;
     }
 
     usz out_index = 0;
@@ -138,9 +141,6 @@ fn RenderingData? HalfEdgeMesh.to_rendering_data(
     }
 
     if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_FLAT) {
-        return cg::INVALID_RENDER_OPTIONS~;
-    }
-    if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
         return cg::INVALID_RENDER_OPTIONS~;
     }
 

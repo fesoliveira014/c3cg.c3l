@@ -348,3 +348,35 @@ fn void test_render_smooth_normals_are_angle_weighted() @test
     assert(float_approx(n0.y, 0.7071067f));
     assert(float_approx(n0.z, 0.7071067f));
 }
+
+fn void test_render_planar_project_uvs_normalize_tilted_quad() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 2, 0, 0 },
+        { 2, 2, 1 },
+        { 0, 2, 1 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.uv_mode = (uint)render::RenderUvMode.RENDER_UV_PLANAR_PROJECT;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.uvs.len == 4);
+    assert(data.normals.len == 0);
+
+    assert(float_approx(data.uvs[0].x, 0.0f));
+    assert(float_approx(data.uvs[0].y, 0.0f));
+    assert(float_approx(data.uvs[1].x, 1.0f));
+    assert(float_approx(data.uvs[1].y, 0.0f));
+    assert(float_approx(data.uvs[2].x, 1.0f));
+    assert(float_approx(data.uvs[2].y, 1.0f));
+    assert(float_approx(data.uvs[3].x, 0.0f));
+    assert(float_approx(data.uvs[3].y, 1.0f));
+}
