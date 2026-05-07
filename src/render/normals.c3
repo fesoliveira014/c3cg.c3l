@@ -43,6 +43,25 @@ fn float angle_at(Vec3f a, Vec3f b, Vec3f c)
     return (float)math::acos((double)dot);
 }
 
+fn void? write_flat_triangle_normal(HalfEdgeMesh* mesh, VertexIndex v0, VertexIndex v1, VertexIndex v2, Vec3f[] out_normals, usz out)
+{
+    Vec3f p0 = mesh.positions[v0];
+    Vec3f p1 = mesh.positions[v1];
+    Vec3f p2 = mesh.positions[v2];
+
+    Vec3f raw = cross3({ p1.x - p0.x, p1.y - p0.y, p1.z - p0.z },
+                       { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z });
+
+    if (length_squared3(raw) <= PLANAR_EPSILON * PLANAR_EPSILON) {
+        return cg::DEGENERATE_INPUT~;
+    }
+
+    Vec3f face_n = normalize_or_zero3(raw);
+    out_normals[out] = face_n;
+    out_normals[out + 1] = face_n;
+    out_normals[out + 2] = face_n;
+}
+
 fn void? generate_smooth_normals(HalfEdgeMesh* mesh, Allocator alloc, Vec3f[] out_normals)
 {
     usz vertex_count = mesh.positions.len;

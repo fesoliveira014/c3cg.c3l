@@ -349,6 +349,225 @@ fn void test_render_smooth_normals_are_angle_weighted() @test
     assert(float_approx(n0.z, 0.7071067f));
 }
 
+fn bool vec3_same(Vec3f a, Vec3f b)
+{
+    return float_approx(a.x, b.x) && float_approx(a.y, b.y) && float_approx(a.z, b.z);
+}
+
+fn void assert_uv_matches_position(Vec3f position, Vec2f uv, Vec3f[] positions, Vec2f[] expected_uvs)
+{
+    for (usz i = 0; i < positions.len; i++) {
+        if (vec3_same(position, positions[i])) {
+            assert(float_approx(uv.x, expected_uvs[i].x));
+            assert(float_approx(uv.y, expected_uvs[i].y));
+            return;
+        }
+    }
+    unreachable();
+}
+
+fn void test_render_flat_normals_expand_triangle_mesh() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.vertices.len == 12);
+    assert(data.indices.len == 12);
+    assert(data.normals.len == 12);
+    assert(data.uvs.len == 0);
+
+    for (usz i = 0; i < 12; i++) {
+        assert(data.indices[i] == (uint)i);
+    }
+
+    for (usz i = 0; i < data.normals.len; i++) {
+        float len_val = render::length3(data.normals[i]);
+        assert(float_approx(len_val, 1.0f));
+    }
+}
+
+fn void test_render_flat_normals_fault_on_polygon_mesh() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+
+    if (catch err = mesh.to_rendering_data(mem, options)) {
+        assert(err == cg::NON_TRIANGLE_FACE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_render_flat_normals_preserve_hard_edges_by_expansion() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[6] indices = { 0, 1, 2, 0, 3, 1 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.vertices.len == 6);
+    assert(data.normals.len == 6);
+    assert(data.indices.len == 6);
+    for (usz i = 0; i < 6; i++) {
+        assert(data.indices[i] == (uint)i);
+    }
+
+    Vec3f n0 = data.normals[0];
+    Vec3f n1 = data.normals[1];
+    Vec3f n2 = data.normals[2];
+    assert(vec3_same(n0, n1));
+    assert(vec3_same(n0, n2));
+    assert(float_approx(n0.x, 0.0f));
+    assert(float_approx(n0.y, 0.0f));
+    assert(float_approx(n0.z, 1.0f));
+
+    Vec3f n3 = data.normals[3];
+    Vec3f n4 = data.normals[4];
+    Vec3f n5 = data.normals[5];
+    assert(vec3_same(n3, n4));
+    assert(vec3_same(n3, n5));
+    assert(float_approx(n3.x, 0.0f));
+    assert(float_approx(n3.y, 1.0f));
+    assert(float_approx(n3.z, 0.0f));
+
+    assert(!float_approx(n0.y, n3.y) || !float_approx(n0.z, n3.z));
+}
+
+fn void test_render_flat_source_uvs_expand_by_original_vertex() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+    };
+    Vec3f[3] normals = {
+        { 0, 0, 1 },
+        { 0, 0, 1 },
+        { 0, 0, 1 },
+    };
+    Vec2f[3] uvs = {
+        { 0, 0 },
+        { 1, 0 },
+        { 0, 1 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles_with_attrs(
+        mem, positions[..], normals[..], uvs[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+    options.uv_mode = (uint)render::RenderUvMode.RENDER_UV_SOURCE;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.vertices.len == 3);
+    assert(data.uvs.len == 3);
+    for (usz i = 0; i < data.vertices.len; i++) {
+        assert_uv_matches_position(data.vertices[i], data.uvs[i], positions[..], uvs[..]);
+    }
+}
+
+fn void test_render_flat_planar_project_uvs_expand_from_original_vertices() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 2, 0, 0 },
+        { 0, 2, 0 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+    options.uv_mode = (uint)render::RenderUvMode.RENDER_UV_PLANAR_PROJECT;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    Vec2f[3] expected_uvs = {
+        { 0, 0 },
+        { 1, 0 },
+        { 0, 1 },
+    };
+
+    assert(data.vertices.len == 3);
+    assert(data.uvs.len == 3);
+    for (usz i = 0; i < data.vertices.len; i++) {
+        assert_uv_matches_position(data.vertices[i], data.uvs[i], positions[..], expected_uvs[..]);
+    }
+}
+
+fn void test_render_flat_source_or_zero_uvs_zero_fill_when_missing() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+    options.uv_mode = (uint)render::RenderUvMode.RENDER_UV_SOURCE_OR_ZERO;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.uvs.len == data.vertices.len);
+    for (usz i = 0; i < data.uvs.len; i++) {
+        assert(data.uvs[i].x == 0);
+        assert(data.uvs[i].y == 0);
+    }
+}
+
+fn void test_render_flat_degenerate_triangle_faults_before_allocation_path() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 2, 0, 0 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_FLAT;
+
+    if (catch err = mesh.to_rendering_data(mem, options)) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
+}
+
 fn void test_render_planar_project_uvs_normalize_tilted_quad() @test
 {
     Vec3f[4] positions = {

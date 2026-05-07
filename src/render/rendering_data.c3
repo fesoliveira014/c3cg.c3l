@@ -127,6 +127,83 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
     return data;
 }
 
+fn RenderingData? build_flat_rendering_data(HalfEdgeMesh* mesh, Allocator alloc, RenderOptions options)
+{
+    usz triangle_count = mesh.faces.len;
+    usz expanded_count = triangle_count * 3;
+
+    RenderingData data;
+
+    data.vertices = mem::alloc::new_array(alloc, Vec3f, expanded_count);
+    defer catch free(data.vertices);
+    data.indices = mem::alloc::new_array(alloc, uint, expanded_count);
+    defer catch free(data.indices);
+    data.normals = mem::alloc::new_array(alloc, Vec3f, expanded_count);
+    defer catch free(data.normals);
+
+    if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE ||
+        options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO ||
+        options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
+        data.uvs = mem::alloc::new_array(alloc, Vec2f, expanded_count);
+    } else {
+        data.uvs = mem::alloc::new_array(alloc, Vec2f, 0);
+    }
+    defer catch free(data.uvs);
+
+    usz max_deg = max_face_degree(mesh);
+    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    defer free(face_vertices);
+
+    Vec2f[] shared_uvs = {};
+    if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
+        shared_uvs = mem::alloc::new_array(alloc, Vec2f, mesh.positions.len);
+        project_planar_uvs(mesh, alloc, shared_uvs)!;
+    }
+    defer free(shared_uvs);
+
+    usz out = 0;
+    for (usz f = 0; f < mesh.faces.len; f++) {
+        int degree = collect_face_vertices(mesh, (FaceIndex)(int)f, face_vertices)!;
+        VertexIndex v0 = face_vertices[0];
+        VertexIndex v1 = face_vertices[1];
+        VertexIndex v2 = face_vertices[2];
+
+        data.vertices[out] = mesh.positions[v0];
+        data.vertices[out + 1] = mesh.positions[v1];
+        data.vertices[out + 2] = mesh.positions[v2];
+
+        data.indices[out] = (uint)out;
+        data.indices[out + 1] = (uint)(out + 1);
+        data.indices[out + 2] = (uint)(out + 2);
+
+        write_flat_triangle_normal(mesh, v0, v1, v2, data.normals, out)!;
+
+        if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE) {
+            data.uvs[out] = mesh.uvs[v0];
+            data.uvs[out + 1] = mesh.uvs[v1];
+            data.uvs[out + 2] = mesh.uvs[v2];
+        } else if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO) {
+            if (mesh.uvs.len > 0) {
+                data.uvs[out] = mesh.uvs[v0];
+                data.uvs[out + 1] = mesh.uvs[v1];
+                data.uvs[out + 2] = mesh.uvs[v2];
+            } else {
+                data.uvs[out] = { 0, 0 };
+                data.uvs[out + 1] = { 0, 0 };
+                data.uvs[out + 2] = { 0, 0 };
+            }
+        } else if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
+            data.uvs[out] = shared_uvs[v0];
+            data.uvs[out + 1] = shared_uvs[v1];
+            data.uvs[out + 2] = shared_uvs[v2];
+        }
+
+        out += 3;
+    }
+
+    return data;
+}
+
 fn RenderingData? HalfEdgeMesh.to_rendering_data(
     &self,
     Allocator alloc,
@@ -141,7 +218,7 @@ fn RenderingData? HalfEdgeMesh.to_rendering_data(
     }
 
     if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_FLAT) {
-        return cg::INVALID_RENDER_OPTIONS~;
+        return build_flat_rendering_data(self, alloc, options)!;
     }
 
     return build_shared_rendering_data(self, alloc, options)!;
