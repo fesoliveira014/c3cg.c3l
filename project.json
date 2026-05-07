@@ -11,7 +11,9 @@
     "src/half_edge/topology.c3",
     "src/half_edge/walks.c3",
     "src/half_edge/validate.c3",
-    "src/render/rendering_data.c3"
+    "src/render/rendering_data.c3",
+    "src/render/normals.c3",
+    "src/render/uvs.c3"
   ],
   "test-sources": ["test/**"],
   "targets": {
