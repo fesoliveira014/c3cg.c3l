@@ -73,6 +73,8 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
 
     if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SOURCE) {
         data.normals = mem::alloc::new_array(alloc, Vec3f, mesh.positions.len);
+    } else if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SMOOTH) {
+        data.normals = mem::alloc::new_array(alloc, Vec3f, mesh.positions.len);
     } else {
         data.normals = mem::alloc::new_array(alloc, Vec3f, 0);
     }
@@ -95,6 +97,8 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
 
     if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SOURCE) {
         copy_source_normals(mesh, data.normals);
+    } else if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SMOOTH) {
+        generate_smooth_normals(mesh, alloc, data.normals)!;
     }
 
     if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE) {
@@ -133,8 +137,7 @@ fn RenderingData? HalfEdgeMesh.to_rendering_data(
         validate_polygon_planarity(self, alloc, PLANAR_EPSILON)!;
     }
 
-    if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SMOOTH ||
-        options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_FLAT) {
+    if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_FLAT) {
         return cg::INVALID_RENDER_OPTIONS~;
     }
     if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {

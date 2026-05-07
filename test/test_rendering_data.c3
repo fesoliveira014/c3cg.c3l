@@ -2,6 +2,16 @@ module test;
 import cg;
 import cg::half_edge;
 import cg::render;
+import std::math;
+
+const float RENDER_TEST_EPSILON = 0.001f;
+
+fn bool float_approx(float a, float b)
+{
+    float diff = a - b;
+    if (diff < 0.0f) diff = -diff;
+    return diff <= RENDER_TEST_EPSILON;
+}
 
 fn void test_render_destroy_zeroes_data() @test
 {
@@ -289,4 +299,52 @@ fn void test_render_degenerate_polygon_plane_faults() @test
         return;
     }
     unreachable();
+}
+
+fn void test_render_smooth_normals_are_unit_length_on_tetrahedron() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_SMOOTH;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.vertices.len == 4);
+    assert(data.indices.len == 12);
+    assert(data.normals.len == 4);
+    assert(data.uvs.len == 0);
+
+    for (usz i = 0; i < data.normals.len; i++) {
+        float len = render::length3(data.normals[i]);
+        assert(float_approx(len, 1.0f));
+    }
+}
+
+fn void test_render_smooth_normals_are_angle_weighted() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 2, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[6] indices = { 0, 1, 2, 0, 3, 1 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.normal_mode = (uint)render::RenderNormalMode.RENDER_NORMAL_SMOOTH;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.normals.len == 4);
+
+    Vec3f n0 = data.normals[0];
+    assert(float_approx(n0.x, 0.0f));
+    assert(float_approx(n0.y, 0.7071067f));
+    assert(float_approx(n0.z, 0.7071067f));
 }
