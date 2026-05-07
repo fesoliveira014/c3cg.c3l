@@ -225,3 +225,68 @@ fn void test_render_output_owned_independently() @test
     assert(data.vertices[0] == positions[0]);
     assert(data.vertices[0] != mesh.positions[0]);
 }
+
+fn void test_render_non_planar_polygon_faults() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0.1 },
+        { 0, 1, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    if (catch err = mesh.to_rendering_data(mem)) {
+        assert(err == cg::NON_PLANAR_FACE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_render_skip_planarity_allows_non_planar_polygon_fan() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0.1 },
+        { 0, 1, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    render::RenderOptions options = render::DEFAULT_RENDER_OPTIONS;
+    options.skip_planarity_check = true;
+
+    RenderingData data = mesh.to_rendering_data(mem, options)!!;
+    defer data.destroy();
+
+    assert(data.vertices.len == 4);
+    assert(data.indices.len == 6);
+    assert(data.normals.len == 0);
+    assert(data.uvs.len == 0);
+}
+
+fn void test_render_degenerate_polygon_plane_faults() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 2, 0, 0 },
+        { 3, 0, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    if (catch err = mesh.to_rendering_data(mem)) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
+}

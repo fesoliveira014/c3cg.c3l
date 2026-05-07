@@ -61,15 +61,8 @@ fn void? validate_render_options(RenderOptions options)
 
 fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator alloc, RenderOptions options)
 {
-    usz triangle_count = 0;
-    usz max_face_degree = 0;
-
-    for (usz f = 0; f < mesh.faces.len; f++) {
-        int degree = mesh.face_degree((FaceIndex)(int)f);
-        usz face_degree = (usz)degree;
-        triangle_count += face_degree - 2;
-        if (face_degree > max_face_degree) max_face_degree = face_degree;
-    }
+    usz triangle_count = fan_triangle_count(mesh);
+    usz max_deg = max_face_degree(mesh);
 
     RenderingData data;
 
@@ -93,7 +86,7 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
     }
     defer catch free(data.uvs);
 
-    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_face_degree);
+    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_deg);
     defer free(face_vertices);
 
     for (usz i = 0; i < mesh.positions.len; i++) {
@@ -135,6 +128,10 @@ fn RenderingData? HalfEdgeMesh.to_rendering_data(
     validate_render_options(options)!;
     self.validate()!;
     validate_required_render_attrs(self, options)!;
+    validate_all_faces_triangular_and_non_degenerate_if_flat(self, alloc, options)!;
+    if (!options.skip_planarity_check) {
+        validate_polygon_planarity(self, alloc, PLANAR_EPSILON)!;
+    }
 
     if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SMOOTH ||
         options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_FLAT) {
