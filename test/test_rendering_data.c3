@@ -124,3 +124,37 @@ fn void test_render_missing_attrs_zero_filled() @test
         assert(data.uvs[i][1] == 0);
     }
 }
+
+fn void test_render_invalid_mesh_returns_validation_fault() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+
+    mesh.half_edges[0].next = -2;
+
+    if (catch err = mesh.to_rendering_data(mem)) {
+        assert(err == cg::INVALID_HALF_EDGE_REFERENCE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_render_output_owned_independently() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    RenderingData data = mesh.to_rendering_data(mem)!!;
+    defer data.destroy();
+
+    mesh.positions[0] = { 9, 9, 9 };
+
+    assert(data.vertices[0] == positions[0]);
+    assert(data.vertices[0] != mesh.positions[0]);
+}

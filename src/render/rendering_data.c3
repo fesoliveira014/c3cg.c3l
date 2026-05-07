@@ -21,6 +21,8 @@ fn void RenderingData.destroy(&self)
 
 fn RenderingData? HalfEdgeMesh.to_rendering_data(&self, Allocator alloc)
 {
+    self.validate()!;
+
     usz triangle_count = 0;
     usz max_face_degree = 0;
 
