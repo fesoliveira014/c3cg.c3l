@@ -2,6 +2,31 @@ module test;
 import cg;
 import cg::half_edge;
 
+struct M4HalfEdgeSnapshot {
+    VertexIndex origin;
+    HeIndex   next;
+    HeIndex   twin;
+    FaceIndex face;
+}
+
+fn M4HalfEdgeSnapshot m4_snapshot_half_edge(HalfEdgeMesh* mesh, HeIndex he)
+{
+    M4HalfEdgeSnapshot snapshot;
+    snapshot.origin = mesh.half_edges[he].origin;
+    snapshot.next   = mesh.half_edges[he].next;
+    snapshot.twin   = mesh.half_edges[he].twin;
+    snapshot.face   = mesh.half_edges[he].face;
+    return snapshot;
+}
+
+fn void m4_assert_half_edge_snapshot(HalfEdgeMesh* mesh, HeIndex he, M4HalfEdgeSnapshot snapshot)
+{
+    assert(mesh.half_edges[he].origin == snapshot.origin);
+    assert(mesh.half_edges[he].next   == snapshot.next);
+    assert(mesh.half_edges[he].twin   == snapshot.twin);
+    assert(mesh.half_edges[he].face   == snapshot.face);
+}
+
 fn void test_flip_rejects_invalid_half_edge() @test
 {
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
@@ -187,5 +212,79 @@ fn void test_flip_preserves_counts_and_attributes() @test
     assert(mesh.positions[0] == position_0);
     assert(mesh.normals[0] == normal_0);
     assert(mesh.uvs[0] == uv_0);
+    mesh.validate()!!;
+}
+
+fn void test_flip_rejects_non_triangle_face() @test
+{
+    Vec3f[5] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 1, 1, 0 },
+        { 2, 0, 0 },
+    };
+    uint[3] offsets = { 0, 3, 7 };
+    uint[7] indices = { 0, 1, 2, 1, 0, 3, 4 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+
+    assert(mesh.twin(0) == 3);
+    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, 0);
+    assert(!mesh.is_flip_ok(0));
+    if (catch err = mesh.flip(0)) {
+        assert(err == cg::NON_TRIANGLE_FACE);
+    } else {
+        assert(false);
+    }
+    m4_assert_half_edge_snapshot(&mesh, 0, before);
+    mesh.validate()!!;
+}
+
+fn void test_flip_rejects_degenerate_output_endpoints() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+    };
+    uint[6] indices = { 0, 1, 2, 1, 0, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+
+    assert(mesh.twin(0) == 3);
+    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, 0);
+    assert(!mesh.is_flip_ok(0));
+    if (catch err = mesh.flip(0)) {
+        assert(err == cg::DEGENERATE_INPUT);
+    } else {
+        assert(false);
+    }
+    m4_assert_half_edge_snapshot(&mesh, 0, before);
+    mesh.validate()!!;
+}
+
+fn void test_flip_rejects_duplicate_new_edge() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+
+    HeIndex he = 0;
+    assert(mesh.twin(he) == 5);
+    assert(m4_mesh_has_undirected_edge(&mesh, 2, 3));
+
+    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, he);
+
+    assert(!mesh.is_flip_ok(he));
+    if (catch err = mesh.flip(he)) {
+        assert(err == cg::EDGE_ALREADY_EXISTS);
+    } else {
+        assert(false);
+    }
+
+    m4_assert_half_edge_snapshot(&mesh, he, before);
     mesh.validate()!!;
 }
