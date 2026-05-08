@@ -58,6 +58,39 @@ fn bool m4_undirected_edge_matches(HalfEdgeMesh* mesh, HeIndex he, VertexIndex a
     return (from == a && to == b) || (from == b && to == a);
 }
 
+fn bool m4_face_has_vertices(HalfEdgeMesh* mesh, FaceIndex face, VertexIndex a, VertexIndex b, VertexIndex c)
+{
+    VertexIndex[3] verts;
+    int count = mesh.face_vertices(face, verts[..])!!;
+    if (count != 3) return false;
+
+    bool has_a = false;
+    bool has_b = false;
+    bool has_c = false;
+    for (usz i = 0; i < 3; i++) {
+        if (verts[i] == a) has_a = true;
+        if (verts[i] == b) has_b = true;
+        if (verts[i] == c) has_c = true;
+    }
+    return has_a && has_b && has_c;
+}
+
+fn bool m4_mesh_has_face_vertices(HalfEdgeMesh* mesh, VertexIndex a, VertexIndex b, VertexIndex c)
+{
+    for (usz i = 0; i < mesh.faces.len; i++) {
+        if (m4_face_has_vertices(mesh, (FaceIndex)(int)i, a, b, c)) return true;
+    }
+    return false;
+}
+
+fn bool m4_mesh_has_undirected_edge(HalfEdgeMesh* mesh, VertexIndex a, VertexIndex b)
+{
+    for (usz i = 0; i < mesh.half_edges.len; i++) {
+        if (m4_undirected_edge_matches(mesh, (HeIndex)(int)i, a, b)) return true;
+    }
+    return false;
+}
+
 fn void test_flip_ok_on_interior_diamond() @test
 {
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
@@ -95,5 +128,64 @@ fn void test_flip_refreshes_local_vertex_handles() @test
         assert(handle != cg::INVALID_HE);
         assert(mesh.half_edges[handle].origin == v);
     }
+    mesh.validate()!!;
+}
+
+fn void test_flip_back_restores_original_topology_equivalence() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
+    defer mesh.destroy();
+
+    assert(m4_mesh_has_face_vertices(&mesh, 0, 1, 2));
+    assert(m4_mesh_has_face_vertices(&mesh, 1, 2, 3));
+    assert(m4_mesh_has_undirected_edge(&mesh, 1, 2));
+
+    mesh.flip(1)!!;
+    mesh.flip(1)!!;
+
+    mesh.validate()!!;
+    assert(m4_mesh_has_face_vertices(&mesh, 0, 1, 2));
+    assert(m4_mesh_has_face_vertices(&mesh, 1, 2, 3));
+    assert(m4_mesh_has_undirected_edge(&mesh, 1, 2));
+}
+
+fn void test_flip_preserves_euler_counts() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
+    defer mesh.destroy();
+
+    usz vertex_count = mesh.vertices.len;
+    usz half_edge_count = mesh.half_edges.len;
+    usz face_count = mesh.faces.len;
+
+    mesh.flip(1)!!;
+
+    assert(mesh.vertices.len == vertex_count);
+    assert(mesh.half_edges.len == half_edge_count);
+    assert(mesh.faces.len == face_count);
+    mesh.validate()!!;
+}
+
+fn void test_flip_preserves_counts_and_attributes() @test
+{
+    HalfEdgeMesh mesh = half_edge::from_triangles_with_attrs(
+        mem, DIAMOND_POSITIONS[..], TET_NORMALS[..], TET_UVS[..], DIAMOND_INDICES[..])!!;
+    defer mesh.destroy();
+
+    usz positions_len = mesh.positions.len;
+    usz normals_len = mesh.normals.len;
+    usz uvs_len = mesh.uvs.len;
+    Vec3f position_0 = mesh.positions[0];
+    Vec3f normal_0 = mesh.normals[0];
+    Vec2f uv_0 = mesh.uvs[0];
+
+    mesh.flip(1)!!;
+
+    assert(mesh.positions.len == positions_len);
+    assert(mesh.normals.len == normals_len);
+    assert(mesh.uvs.len == uvs_len);
+    assert(mesh.positions[0] == position_0);
+    assert(mesh.normals[0] == normal_0);
+    assert(mesh.uvs[0] == uv_0);
     mesh.validate()!!;
 }
