@@ -43,6 +43,8 @@ import cg::half_edge;
 
 Add `import std::math;` only in files that need square root or absolute-value support from the standard library. Do not import `std::mem` just to use `mem`, `free`, or `mem::alloc::new_array`.
 
+Algorithm snippets below are C3-like pseudocode. They specify control flow, validation order, ownership, and formulas; the implementation plan must compile-check exact casts, foreach syntax, vector literals, and helper names against c3c 0.7.11.
+
 ## Public API
 
 All public geometry functions live in `module cg::geometry`.
@@ -107,7 +109,7 @@ Reuse existing faults:
 - `INVALID_FACE_CYCLE`
 - `INVALID_TOPOLOGY`
 - validation faults propagated from `mesh.validate()`
-- `OUTPUT_BUFFER_TOO_SMALL` only if an internal walk helper unexpectedly produces it
+- `OUTPUT_BUFFER_TOO_SMALL` only if an internal walk or collection helper produces it as a defensive guard
 
 No new M5 fault is expected.
 
@@ -130,6 +132,27 @@ n = cross(u, v)
 denom = 2 * dot(n, n)
 center = a + (cross(n, u) * dot(v, v) + cross(v, n) * dot(u, u)) / denom
 ```
+
+C3-like implementation pseudocode:
+
+```c3
+fn Vec3f? circumcenter_planar(Vec3f a, Vec3f b, Vec3f c)
+{
+    Vec3f u = vec3_sub(b, a);
+    Vec3f v = vec3_sub(c, a);
+    Vec3f n = vec3_cross(u, v);
+    float n_len_sq = vec3_dot(n, n);
+    if (n_len_sq <= GEOMETRY_EPSILON * GEOMETRY_EPSILON) return cg::DEGENERATE_INPUT~;
+
+    float uu = vec3_dot(u, u);
+    float vv = vec3_dot(v, v);
+    Vec3f term_u = vec3_scale(vec3_cross(n, u), vv);
+    Vec3f term_v = vec3_scale(vec3_cross(v, n), uu);
+    return vec3_add(a, vec3_scale(vec3_add(term_u, term_v), 1.0f / (2.0f * n_len_sq)));
+}
+```
+
+The helper names above are illustrative; the implementation plan should choose final module-scope helper names and compile-check vector literal/operator details with c3c 0.7.11.
 
 Degeneracy:
 
@@ -154,6 +177,21 @@ len = length(planar)
 center = planar * (radius / len)
 ```
 
+C3-like implementation pseudocode:
+
+```c3
+fn Vec3f? circumcenter_on_sphere(Vec3f a, Vec3f b, Vec3f c, float radius)
+{
+    if (radius <= GEOMETRY_EPSILON) return cg::DEGENERATE_INPUT~;
+
+    Vec3f planar = circumcenter_planar(a, b, c)!;
+    float len = vec3_length(planar);
+    if (len <= GEOMETRY_EPSILON) return cg::DEGENERATE_INPUT~;
+
+    return vec3_scale(planar, radius / len);
+}
+```
+
 Degeneracy:
 
 - fault `DEGENERATE_INPUT` if `radius <= GEOMETRY_EPSILON`
@@ -175,11 +213,63 @@ M5 does not validate that each input point is exactly on the sphere. Later spher
    - write output at `out[f]`
 4. Use `defer catch free(out)` for fault cleanup after allocation.
 
+C3-like implementation pseudocode:
+
+```c3
+fn Vec3f[]? circumcenters_planar(Allocator alloc, HalfEdgeMesh* tri_mesh)
+{
+    tri_mesh.validate()!;
+
+    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, tri_mesh.faces.len);
+    defer catch free(out);
+
+    foreach (int f, HalfEdgeFace _ : tri_mesh.faces)
+    {
+        FaceIndex face = (FaceIndex)f;
+        VertexIndex[3] verts;
+        collect_triangle_face_vertices(tri_mesh, face, verts[:])!;
+
+        Vec3f a = tri_mesh.positions[(int)verts[0]];
+        Vec3f b = tri_mesh.positions[(int)verts[1]];
+        Vec3f c = tri_mesh.positions[(int)verts[2]];
+        out[f] = circumcenter_planar(a, b, c)!;
+    }
+
+    return out;
+}
+```
+
+`collect_triangle_face_vertices` should first check `tri_mesh.face_degree(face) == 3`, return `NON_TRIANGLE_FACE` otherwise, then fill exactly three vertex indices from the face cycle. It may use a fixed local array and existing `face_vertices`, or a direct three-half-edge walk.
+
+C3-like helper pseudocode:
+
+```c3
+fn void? collect_triangle_face_vertices(HalfEdgeMesh* mesh, FaceIndex face, VertexIndex[] out)
+{
+    if (mesh.face_degree(face) != 3) return cg::NON_TRIANGLE_FACE~;
+    if (out.len < 3) return cg::OUTPUT_BUFFER_TOO_SMALL~;
+
+    int count = mesh.face_vertices(face, out)!;
+    if (count != 3) return cg::NON_TRIANGLE_FACE~;
+    return;
+}
+```
+
+The helper may direct-walk `h0 -> h1 -> h2` instead of using `face_vertices`; either implementation must preserve the same fault behavior and fill order.
+
 `circumcenters_on_sphere(alloc, tri_mesh, radius)`:
 
 1. Validate `radius > GEOMETRY_EPSILON` before allocation.
 2. Validate `tri_mesh.validate()` before allocation.
 3. Follow the same face loop and ownership policy, calling `circumcenter_on_sphere`.
+
+C3-like implementation difference:
+
+```c3
+if (radius <= GEOMETRY_EPSILON) return cg::DEGENERATE_INPUT~;
+tri_mesh.validate()!;
+// allocate, collect triangle vertices, then call circumcenter_on_sphere(a, b, c, radius)!
+```
 
 All batch functions preserve face-index mapping: output index equals source face index.
 
@@ -218,6 +308,44 @@ fn Vec3f? centroid_for_valid_face(HalfEdgeMesh* mesh, FaceIndex face);
 
 `centroid_for_valid_face` assumes the caller already checked the face index and validated mesh topology. Public `face_centroid` checks the face reference, calls `mesh.validate()`, then calls the helper. Batch `face_centroids` calls `mesh.validate()` once, then calls the helper for every face.
 
+C3-like implementation pseudocode:
+
+```c3
+fn Vec3f? face_centroid(HalfEdgeMesh* mesh, FaceIndex face)
+{
+    if (face < 0 || face >= (FaceIndex)mesh.faces.len) return cg::INVALID_FACE_REFERENCE~;
+    mesh.validate()!;
+    return centroid_for_valid_face(mesh, face);
+}
+
+fn Vec3f? centroid_for_valid_face(HalfEdgeMesh* mesh, FaceIndex face)
+{
+    HeIndex start = mesh.faces[(int)face].half_edge;
+    HeIndex current = start;
+    Vec3f sum = { 0.0f, 0.0f, 0.0f };
+    int count = 0;
+
+    while (true)
+    {
+        if (current == cg::INVALID_HE) return cg::INVALID_FACE_CYCLE~;
+        if (count >= mesh.half_edges.len) return cg::INVALID_FACE_CYCLE~;
+
+        HalfEdge edge = mesh.half_edges[(int)current];
+        if (edge.origin < 0 || edge.origin >= (VertexIndex)mesh.positions.len) return cg::INVALID_TOPOLOGY~;
+
+        sum = vec3_add(sum, mesh.positions[(int)edge.origin]);
+        count += 1;
+        current = edge.next;
+        if (current == start) break;
+    }
+
+    if (count == 0) return cg::INVALID_FACE_CYCLE~;
+    return vec3_scale(sum, 1.0f / (float)count);
+}
+```
+
+Exact casts and vector literal syntax should be compile-checked during implementation. The important algorithmic points are one validation path for public scalar calls, one no-revalidate helper for batch calls, a face-cycle guard, and vertex-average accumulation.
+
 ### `face_centroids`
 
 `face_centroids(alloc, mesh)`:
@@ -241,7 +369,21 @@ value < -epsilon  => PREDICATE_NEGATIVE
 otherwise         => PREDICATE_ZERO
 ```
 
-If a negative epsilon is passed, implementation should use its absolute value or clamp to `DEFAULT_PREDICATE_EPSILON`; choose one in the implementation plan and test it. Do not let negative epsilon invert classifier behavior.
+If a negative epsilon is passed, implementation should use its absolute value. Do not let negative epsilon invert classifier behavior.
+
+C3-like implementation pseudocode:
+
+```c3
+fn PredicateSign classify_predicate(float value, float epsilon)
+{
+    float e = abs_float(epsilon);
+    if (value > e) return PREDICATE_POSITIVE;
+    if (value < -e) return PREDICATE_NEGATIVE;
+    return PREDICATE_ZERO;
+}
+```
+
+`abs_float` is a placeholder for the final local helper or stdlib call selected and compile-checked during implementation.
 
 ### `orient_2d`
 
@@ -249,6 +391,17 @@ Use the standard signed 2D orientation determinant:
 
 ```text
 (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+```
+
+C3-like implementation pseudocode:
+
+```c3
+fn PredicateSign orient_2d(Vec2f a, Vec2f b, Vec2f c, float epsilon = DEFAULT_PREDICATE_EPSILON)
+{
+    float value = (b.x - a.x) * (c.y - a.y)
+                - (b.y - a.y) * (c.x - a.x);
+    return classify_predicate(value, epsilon);
+}
 ```
 
 Convention:
@@ -268,6 +421,29 @@ cx = c.x - p.x; cy = c.y - p.y; cc = cx*cx + cy*cy
 value = ax * (by * cc - bb * cy)
       - ay * (bx * cc - bb * cx)
       + aa * (bx * cy - by * cx)
+```
+
+C3-like implementation pseudocode:
+
+```c3
+fn PredicateSign in_circle_2d(Vec2f a, Vec2f b, Vec2f c, Vec2f p, float epsilon = DEFAULT_PREDICATE_EPSILON)
+{
+    float ax = a.x - p.x;
+    float ay = a.y - p.y;
+    float bx = b.x - p.x;
+    float by = b.y - p.y;
+    float cx = c.x - p.x;
+    float cy = c.y - p.y;
+
+    float aa = ax * ax + ay * ay;
+    float bb = bx * bx + by * by;
+    float cc = cx * cx + cy * cy;
+
+    float value = ax * (by * cc - bb * cy)
+                - ay * (bx * cc - bb * cx)
+                + aa * (bx * cy - by * cx);
+    return classify_predicate(value, epsilon);
+}
 ```
 
 Convention:
@@ -290,6 +466,49 @@ Convention:
 - for a negatively oriented tetrahedron, inside/outside signs are inverted
 
 Implementation may compute the 4x4 lifted determinant using helper `det3`/`det4` module-scope functions. These helpers are not public API and should not be documented as user-facing functions. If the chosen determinant arrangement naturally produces the opposite sign from the convention above, negate the value before classification.
+
+Determinant helper pseudocode:
+
+```text
+det3(a00,a01,a02, a10,a11,a12, a20,a21,a22) =
+    a00 * (a11*a22 - a12*a21)
+  - a01 * (a10*a22 - a12*a20)
+  + a02 * (a10*a21 - a11*a20)
+
+det4(row0, row1, row2, row3) =
+    r00 * det3(r11,r12,r13, r21,r22,r23, r31,r32,r33)
+  - r01 * det3(r10,r12,r13, r20,r22,r23, r30,r32,r33)
+  + r02 * det3(r10,r11,r13, r20,r21,r23, r30,r31,r33)
+  - r03 * det3(r10,r11,r12, r20,r21,r22, r30,r31,r32)
+```
+
+C3-like implementation pseudocode:
+
+```c3
+fn PredicateSign on_sphere(Vec3f a, Vec3f b, Vec3f c, Vec3f d, Vec3f p, float epsilon = DEFAULT_PREDICATE_EPSILON)
+{
+    Vec3f ar = vec3_sub(a, p);
+    Vec3f br = vec3_sub(b, p);
+    Vec3f cr = vec3_sub(c, p);
+    Vec3f dr = vec3_sub(d, p);
+
+    float a_len = vec3_dot(ar, ar);
+    float b_len = vec3_dot(br, br);
+    float c_len = vec3_dot(cr, cr);
+    float d_len = vec3_dot(dr, dr);
+
+    float value = det4(
+        ar.x, ar.y, ar.z, a_len,
+        br.x, br.y, br.z, b_len,
+        cr.x, cr.y, cr.z, c_len,
+        dr.x, dr.y, dr.z, d_len,
+    );
+
+    return classify_predicate(value, epsilon);
+}
+```
+
+The implementation must verify the determinant row ordering with `test_on_sphere_classifies_known_tetrahedron`. Do not conditionally normalize the value by tetrahedron orientation; the public convention intentionally says negatively oriented tetrahedra invert inside/outside signs. If the raw `det4` arrangement gives the opposite sign for a positively oriented tetrahedron, normalize the formula once by negating `value` unconditionally or by swapping determinant rows so the positive-orientation convention remains stable.
 
 For degenerate input, such as collinear `in_circle_2d` points or coplanar `on_sphere` points, the determinant should classify as `PREDICATE_ZERO`. Callers that need inside/outside semantics must avoid degenerate base geometry.
 
