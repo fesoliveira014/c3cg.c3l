@@ -266,3 +266,93 @@ fn void test_circumcenters_on_sphere_triangle_mesh() @test
     assert(centers.len == 1);
     assert(m5_float_approx(m5_dot3(centers[0], centers[0]), 1.0f));
 }
+
+fn void test_face_centroid_triangle_average() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 3, 0, 0 },
+        { 0, 3, 0 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f centroid = geometry::face_centroid(&mesh, 0)!!;
+    assert(m5_vec3_approx(centroid, { 1, 1, 0 }));
+}
+
+fn void test_face_centroid_quad_vertex_average() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 2, 0, 0 },
+        { 2, 2, 0 },
+        { 0, 2, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f centroid = geometry::face_centroid(&mesh, 0)!!;
+    assert(m5_vec3_approx(centroid, { 1, 1, 0 }));
+}
+
+fn void test_face_centroid_invalid_face_faults() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    if (catch err = geometry::face_centroid(&mesh, 99)) {
+        assert(err == cg::INVALID_FACE_REFERENCE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_face_centroids_batch_preserves_face_index_mapping() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 3, 0, 0 },
+        { 0, 3, 0 },
+        { 3, 3, 0 },
+    };
+    uint[6] indices = { 0, 1, 2, 1, 3, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f[] centroids = geometry::face_centroids(mem, &mesh)!!;
+    defer free(centroids);
+
+    assert(centroids.len == mesh.faces.len);
+    assert(m5_vec3_approx(centroids[0], { 1, 1, 0 }));
+    assert(m5_vec3_approx(centroids[1], { 2, 2, 0 }));
+}
+
+fn void test_face_centroid_scalar_matches_batch() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 2, 0, 0 },
+        { 2, 2, 0 },
+        { 0, 2, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f[] batch = geometry::face_centroids(mem, &mesh)!!;
+    defer free(batch);
+
+    Vec3f scalar = geometry::face_centroid(&mesh, 0)!!;
+    assert(m5_vec3_approx(scalar, batch[0]));
+}
