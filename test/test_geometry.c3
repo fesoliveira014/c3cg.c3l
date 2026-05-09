@@ -190,3 +190,79 @@ fn void test_circumcenter_on_sphere_invalid_radius_faults() @test
     }
     unreachable();
 }
+
+fn void test_circumcenters_planar_triangle_mesh() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 2, 0, 0 },
+        { 0, 2, 0 },
+        { 2, 2, 0 },
+    };
+    uint[6] indices = { 0, 1, 2, 1, 3, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f[] centers = geometry::circumcenters_planar(mem, &mesh)!!;
+    defer free(centers);
+
+    assert(centers.len == mesh.faces.len);
+    assert(m5_vec3_approx(centers[0], { 1, 1, 0 }));
+    assert(m5_vec3_approx(centers[1], { 1, 1, 0 }));
+}
+
+fn void test_circumcenters_planar_rejects_non_triangle_face() @test
+{
+    Vec3f[4] positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
+    };
+    uint[2] offsets = { 0, 4 };
+    uint[4] indices = { 0, 1, 2, 3 };
+    HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
+    defer mesh.destroy();
+
+    if (catch err = geometry::circumcenters_planar(mem, &mesh)) {
+        assert(err == cg::NON_TRIANGLE_FACE);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_circumcenters_planar_rejects_degenerate_triangle() @test
+{
+    Vec3f[3] positions = {
+        { 0, 0, 0 },
+        { 1, 1, 1 },
+        { 2, 2, 2 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    if (catch err = geometry::circumcenters_planar(mem, &mesh)) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_circumcenters_on_sphere_triangle_mesh() @test
+{
+    Vec3f[3] positions = {
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[3] indices = { 0, 1, 2 };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f[] centers = geometry::circumcenters_on_sphere(mem, &mesh, 1.0f)!!;
+    defer free(centers);
+
+    assert(centers.len == 1);
+    assert(m5_float_approx(m5_dot3(centers[0], centers[0]), 1.0f));
+}

@@ -62,3 +62,56 @@ fn Vec3f? circumcenter_on_sphere(Vec3f a, Vec3f b, Vec3f c, float radius)
 
     return vec3_scale(planar, radius / len);
 }
+
+fn void? collect_triangle_face_vertices(HalfEdgeMesh* mesh, FaceIndex face, VertexIndex[] out)
+{
+    if (mesh.face_degree(face) != 3) return cg::NON_TRIANGLE_FACE~;
+    if (out.len < 3) return cg::OUTPUT_BUFFER_TOO_SMALL~;
+
+    int count = mesh.face_vertices(face, out)!;
+    if (count != 3) return cg::NON_TRIANGLE_FACE~;
+    return;
+}
+
+fn Vec3f[]? circumcenters_planar(Allocator alloc, HalfEdgeMesh* tri_mesh)
+{
+    tri_mesh.validate()!;
+
+    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, tri_mesh.faces.len);
+    defer catch free(out);
+
+    for (usz i = 0; i < tri_mesh.faces.len; i++) {
+        FaceIndex face = (FaceIndex)(int)i;
+        VertexIndex[3] verts;
+        collect_triangle_face_vertices(tri_mesh, face, verts[..])!;
+
+        Vec3f a = tri_mesh.positions[(int)verts[0]];
+        Vec3f b = tri_mesh.positions[(int)verts[1]];
+        Vec3f c = tri_mesh.positions[(int)verts[2]];
+        out[i] = circumcenter_planar(a, b, c)!;
+    }
+
+    return out;
+}
+
+fn Vec3f[]? circumcenters_on_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, float radius)
+{
+    if (radius <= GEOMETRY_EPSILON) return cg::DEGENERATE_INPUT~;
+    tri_mesh.validate()!;
+
+    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, tri_mesh.faces.len);
+    defer catch free(out);
+
+    for (usz i = 0; i < tri_mesh.faces.len; i++) {
+        FaceIndex face = (FaceIndex)(int)i;
+        VertexIndex[3] verts;
+        collect_triangle_face_vertices(tri_mesh, face, verts[..])!;
+
+        Vec3f a = tri_mesh.positions[(int)verts[0]];
+        Vec3f b = tri_mesh.positions[(int)verts[1]];
+        Vec3f c = tri_mesh.positions[(int)verts[2]];
+        out[i] = circumcenter_on_sphere(a, b, c, radius)!;
+    }
+
+    return out;
+}
