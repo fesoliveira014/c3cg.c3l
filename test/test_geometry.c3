@@ -3,6 +3,45 @@ import cg;
 import cg::half_edge;
 import cg::geometry;
 
+const float M5_TEST_EPSILON = 0.001f;
+
+fn float m5_abs(float value)
+{
+    if (value < 0.0f) return -value;
+    return value;
+}
+
+fn bool m5_float_approx(float a, float b)
+{
+    return m5_abs(a - b) <= M5_TEST_EPSILON;
+}
+
+fn bool m5_vec3_approx(Vec3f a, Vec3f b)
+{
+    return m5_float_approx(a.x, b.x)
+        && m5_float_approx(a.y, b.y)
+        && m5_float_approx(a.z, b.z);
+}
+
+fn float m5_dot3(Vec3f a, Vec3f b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+fn Vec3f m5_cross3(Vec3f a, Vec3f b)
+{
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x,
+    };
+}
+
+fn Vec3f m5_sub3(Vec3f a, Vec3f b)
+{
+    return { a.x - b.x, a.y - b.y, a.z - b.z };
+}
+
 fn void test_predicate_sign_constants() @test
 {
     assert((int)geometry::PREDICATE_NEGATIVE == -1);
@@ -89,4 +128,65 @@ fn void test_predicates_negative_epsilon_does_not_invert_classification() @test
         == geometry::PREDICATE_ZERO);
     assert(geometry::on_sphere({ 1, 0, 0 }, { 0, 0, 1 }, { 0, 1, 0 }, { 0, 0, 0 }, { 0.5, 0.5, 0.5 }, -10.0f)
         == geometry::PREDICATE_ZERO);
+}
+
+fn void test_circumcenter_planar_right_triangle() @test
+{
+    Vec3f center = geometry::circumcenter_planar({ 0, 0, 0 }, { 2, 0, 0 }, { 0, 2, 0 })!!;
+    assert(m5_vec3_approx(center, { 1, 1, 0 }));
+}
+
+fn void test_circumcenter_planar_tilted_triangle_equal_distances() @test
+{
+    Vec3f a = { 0, 0, 1 };
+    Vec3f b = { 2, 0, 1 };
+    Vec3f c = { 0, 2, 3 };
+    Vec3f center = geometry::circumcenter_planar(a, b, c)!!;
+
+    Vec3f da = m5_sub3(center, a);
+    Vec3f db = m5_sub3(center, b);
+    Vec3f dc = m5_sub3(center, c);
+    float ra = m5_dot3(da, da);
+    float rb = m5_dot3(db, db);
+    float rc = m5_dot3(dc, dc);
+
+    Vec3f normal = m5_cross3(m5_sub3(b, a), m5_sub3(c, a));
+    float plane_distance_scaled = m5_dot3(m5_sub3(center, a), normal);
+
+    assert(m5_float_approx(ra, rb));
+    assert(m5_float_approx(ra, rc));
+    assert(m5_float_approx(plane_distance_scaled, 0.0f));
+}
+
+fn void test_circumcenter_planar_degenerate_faults() @test
+{
+    if (catch err = geometry::circumcenter_planar({ 0, 0, 0 }, { 1, 1, 1 }, { 2, 2, 2 })) {
+        assert(err == cg::DEGENERATE_INPUT);
+    } else {
+        unreachable();
+    }
+
+    if (catch err = geometry::circumcenter_planar({ 0, 0, 0 }, { 0, 0, 0 }, { 1, 0, 0 })) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
+}
+
+fn void test_circumcenter_on_sphere_unit_axes() @test
+{
+    Vec3f center = geometry::circumcenter_on_sphere({ 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 }, 1.0f)!!;
+    assert(m5_float_approx(m5_dot3(center, center), 1.0f));
+    assert(center.x > 0.0f);
+    assert(center.y > 0.0f);
+    assert(center.z > 0.0f);
+}
+
+fn void test_circumcenter_on_sphere_invalid_radius_faults() @test
+{
+    if (catch err = geometry::circumcenter_on_sphere({ 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 }, 0.0f)) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
 }

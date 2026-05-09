@@ -13,6 +13,7 @@
     "src/half_edge/validate.c3",
     "src/half_edge/flip.c3",
     "src/geometry/predicates.c3",
+    "src/geometry/circumcenter.c3",
     "src/render/rendering_data.c3",
     "src/render/geometry.c3",
     "src/render/normals.c3",
