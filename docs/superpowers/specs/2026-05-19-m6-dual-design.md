@@ -162,12 +162,12 @@ return result;
 
 ### Memory ownership
 
-| Allocation                | Lifecycle                                                                             |
-| ------------------------- | ------------------------------------------------------------------------------------- |
+| Allocation                | Lifecycle                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `face_offsets`            | Allocated for CSR construction; `defer catch free()`, explicitly `free()` after `from_polygons` returns |
 | `face_indices`            | Allocated for CSR construction; `defer catch free()`, explicitly `free()` after `from_polygons` returns |
-| `scratch`                 | Temp, `defer free()` at end of `dual_from_vertices` scope                             |
-| `positions` (in `dual()`) | Temp from geometry helper, `defer free()` after `dual_from_vertices` returns          |
+| `scratch`                 | Temp, `defer free()` at end of `dual_from_vertices` scope                                               |
+| `positions` (in `dual()`) | Temp from geometry helper, `defer free()` after `dual_from_vertices` returns                            |
 
 ## `dual()` wrapper
 
@@ -190,7 +190,7 @@ fn HalfEdgeMesh? dual(Allocator alloc, HalfEdgeMesh* mesh, DualMode mode, float 
 
 ## Testing
 
-File: `test/test_dual.c3` — `module cg::test;`
+File: `test/test_dual.c3` — `module test;`
 
 ### Fixture A: Tetrahedron
 
@@ -205,7 +205,7 @@ File: `test/test_dual.c3` — `module cg::test;`
 
 | #   | Test                                     | Fixture         | Assertion                                                                                   |
 | --- | ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------- |
-| 1   | `test_dual_tetrahedron_counts`           | A               | `dual(tetra).vertices.len == 4`, `faces.len == 4`, `half_edges.len == 6`                    |
+| 1   | `test_dual_tetrahedron_counts`           | A               | `dual(tetra).vertices.len == 4`, `faces.len == 4`, `half_edges.len == 12`                   |
 | 2   | `test_dual_tetrahedron_closed`           | A               | No boundary edges in dual output                                                            |
 | 3   | `test_dual_tetrahedron_validates`        | A               | `dual(tetra).validate()` succeeds                                                           |
 | 4   | `test_dual_double_dual_roundtrip`        | A               | `dual(dual(tetra, A), B)` has same topology counts as `tetra`                               |
