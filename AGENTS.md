@@ -174,12 +174,12 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 | Milestone | What | Status |
 |-----------|------|--------|
 | M0 | Project scaffolding — types, faults, struct stubs | ✅ Complete |
-| M1 | Half-edge construction (`from_triangles`) + topology queries | Not started |
-| M2 | Walks + validation | Not started |
-| M3 | Rendering data extraction | Not started |
-| M4 | Edge flipping | Not started |
-| M5 | Geometry helpers (circumcenters, centroids, predicates) | Not started |
-| M6 | Dual operation | Not started |
+| M1 | Half-edge construction (`from_triangles`) + topology queries | ✅ Complete |
+| M2 | Walks + validation | ✅ Complete |
+| M3 | Rendering data extraction | ✅ Complete |
+| M4 | Edge flipping | ✅ Complete |
+| M5 | Geometry helpers (circumcenters, centroids, predicates) | ✅ Complete |
+| M6 | Dual operation | ✅ Complete |
 | M7 | Convex hull 2D (Andrew's monotone chain) | Not started |
 | M8 | Convex hull 3D (incremental) | Not started |
 | M9 | Delaunay 2D (Bowyer-Watson) | Not started |
