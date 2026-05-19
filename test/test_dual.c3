@@ -329,3 +329,74 @@ fn void test_dual_mode_circumcenter() @test
     assert(dual_mesh.faces.len == 4);
     dual_mesh.validate()!!;
 }
+
+fn void test_dual_mode_centroid() @test
+{
+    Vec3f[4] tet_positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[12] tet_indices = {
+        0, 1, 2,
+        0, 3, 1,
+        0, 2, 3,
+        1, 3, 2,
+    };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, tet_positions[..], tet_indices[..])!!;
+    defer mesh.destroy();
+
+    HalfEdgeMesh dual_mesh = dual::dual(mem, &mesh, dual::DualMode.CENTROID)!!;
+    defer dual_mesh.destroy();
+
+    assert(dual_mesh.vertices.len == 4);
+    dual_mesh.validate()!!;
+}
+
+fn void test_dual_mode_spherical() @test
+{
+    HalfEdgeMesh ico = half_edge::from_triangles(mem, ICO_POSITIONS[..], ICO_INDICES[..])!!;
+    defer ico.destroy();
+
+    HalfEdgeMesh dual_mesh = dual::dual(mem, &ico, dual::DualMode.SPHERICAL_CIRCUMCENTER, 1.0f)!!;
+    defer dual_mesh.destroy();
+
+    assert(dual_mesh.vertices.len == 20);
+    assert(dual_mesh.faces.len == 12);
+    dual_mesh.validate()!!;
+
+    for (usz i = 0; i < dual_mesh.positions.len; i++) {
+        float x = dual_mesh.positions[i].x;
+        float y = dual_mesh.positions[i].y;
+        float z = dual_mesh.positions[i].z;
+        float len2 = x * x + y * y + z * z;
+        float diff = len2 - 1.0f;
+        if (diff < 0) diff = -diff;
+        assert(diff < 0.001f);
+    }
+}
+
+fn void test_dual_spherical_radius_zero_faults() @test
+{
+    Vec3f[4] tet_positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[12] tet_indices = {
+        0, 1, 2,
+        0, 3, 1,
+        0, 2, 3,
+        1, 3, 2,
+    };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, tet_positions[..], tet_indices[..])!!;
+    defer mesh.destroy();
+
+    if (catch err = dual::dual(mem, &mesh, dual::DualMode.SPHERICAL_CIRCUMCENTER, 0.0f)) {
+        assert(err == cg::DEGENERATE_INPUT);
+        return;
+    }
+    unreachable();
+}
