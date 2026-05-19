@@ -8,7 +8,7 @@ The algorithm runs in O(n log n) time (dominated by the sort phase) with O(n) sc
 
 ## Module
 
-`module cg::hull;` — single file `src/hull/hull_2d.c3` (module declaration inline, consistent with all existing submodules).
+`module cg::hull;` — single file `src/hull/hull_2d.c3i` (`.c3i` extension for library code, consistent with C3 library conventions).
 
 Imports: `cg`, `cg::geometry` (for `orient_2d`), `std::sort`.
 
@@ -49,9 +49,9 @@ The output is CCW by construction of Andrew's monotone chain.
 
 No new `faultdef` entries needed — reuses existing faults from `src/faults.c3i`:
 
-| Fault | When |
-|-------|------|
-| `EMPTY_INPUT` | `positions.len == 0` |
+| Fault              | When                                       |
+| ------------------ | ------------------------------------------ |
+| `EMPTY_INPUT`      | `positions.len == 0`                       |
 | `DEGENERATE_INPUT` | Fewer than 3 non-collinear distinct points |
 
 ## Memory
