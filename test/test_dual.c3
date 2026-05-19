@@ -53,3 +53,34 @@ fn void test_dual_vertex_count_mismatch() @test
     }
     unreachable();
 }
+
+fn void test_dual_tetrahedron_counts() @test
+{
+    Vec3f[4] tet_positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[12] tet_indices = {
+        0, 1, 2,
+        0, 3, 1,
+        0, 2, 3,
+        1, 3, 2,
+    };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, tet_positions[..], tet_indices[..])!!;
+    defer mesh.destroy();
+
+    Vec3f[4] positions = {
+        { 10, 10, 10 },
+        { 20, 20, 20 },
+        { 30, 30, 30 },
+        { 40, 40, 40 },
+    };
+    HalfEdgeMesh dual_mesh = dual::dual_from_vertices(mem, &mesh, positions[..])!!;
+    defer dual_mesh.destroy();
+
+    assert(dual_mesh.vertices.len == 4);
+    assert(dual_mesh.faces.len == 4);
+    assert(dual_mesh.half_edges.len == 12);
+}
