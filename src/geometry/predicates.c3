@@ -5,9 +5,9 @@ typedef PredicateSign = int;
 
 const float GEOMETRY_EPSILON = 0.00001f;
 const float DEFAULT_PREDICATE_EPSILON = 0.00001f;
-const PredicateSign PREDICATE_NEGATIVE = -1;
-const PredicateSign PREDICATE_ZERO = 0;
-const PredicateSign PREDICATE_POSITIVE = 1;
+const PredicateSign PREDICATE_NEGATIVE = (PredicateSign)-1;
+const PredicateSign PREDICATE_ZERO = (PredicateSign)0;
+const PredicateSign PREDICATE_POSITIVE = (PredicateSign)1;
 
 fn float abs_float(float value)
 {

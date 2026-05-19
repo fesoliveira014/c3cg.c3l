@@ -77,7 +77,7 @@ fn Vec3f[]? circumcenters_planar(Allocator alloc, HalfEdgeMesh* tri_mesh)
 {
     tri_mesh.validate()!;
 
-    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, tri_mesh.faces.len);
+    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, (sz) tri_mesh.faces.len);
     defer catch free(out);
 
     for (usz i = 0; i < tri_mesh.faces.len; i++) {
@@ -99,7 +99,7 @@ fn Vec3f[]? circumcenters_on_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, flo
     if (radius <= GEOMETRY_EPSILON) return cg::DEGENERATE_INPUT~;
     tri_mesh.validate()!;
 
-    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, tri_mesh.faces.len);
+    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, (sz) tri_mesh.faces.len);
     defer catch free(out);
 
     for (usz i = 0; i < tri_mesh.faces.len; i++) {

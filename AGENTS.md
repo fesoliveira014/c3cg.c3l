@@ -2,20 +2,20 @@
 
 C3 library (`c3cg.c3l`) providing Delaunay triangulation, Voronoi diagrams, convex hull, polygon triangulation, mesh subdivision, and edge operations — all built on a single flat-array `HalfEdgeMesh` data structure.
 
-Targets C3 0.7.x. Source lives under `cg/` (not yet scaffolded — see M0 plan below).
+Targets C3 0.8.0. Source lives under `src/`.
 
 ## Build & Test
 
 ```bash
-c3c build linux         # debug build (O0)
-c3c run linux           # build + execute
-c3c test linux          # run tests under test/**
+c3c build debug         # debug static library build (O0)
+c3c build release       # release static library build (O3)
+c3c test                # run tests under test/**
 c3c clean               # wipe build/
 ```
 
 Verification before every commit:
 ```bash
-c3c build linux && c3c test linux
+c3c build debug && c3c test
 ```
 
 ## Required Skills
@@ -45,7 +45,7 @@ Definition order within a file: typedefs → aliases → constants → enums →
 - Sentinel return values (`-1`, `0xFFFFFFFF`) outside documented `INVALID_*` constants
 - Bare numeric literals where a named constant would explain the meaning
 - Raw `malloc`/`free` — use `mem::new*`
-- `sizeof(T)` — use `T.sizeof` or `$sizeof(expr)`
+- `sizeof(T)` — use `T::size` or `@sizeof(expr)`
 - Arrow `->` for pointer access — C3 uses `.` for both
 - Goto-cleanup chains — use `defer`
 - `if (catch foo)` without binding — write `if (catch err = foo)`
@@ -75,25 +75,24 @@ The library is organised around a single `HalfEdgeMesh` type that represents bot
 ### Module Layout
 
 ```
-cg/
-├── src/
-│   ├── cg.c3                  module cg;          umbrella
-│   ├── types.c3               Vec aliases, HeIndex, FaceIndex, VertexIndex, Aabb
-│   ├── half_edge_mesh.c3      HalfEdge, HalfEdgeFace, HalfEdgeVertex, HalfEdgeMesh structs
-│   ├── faults.c3              Cross-cutting faults
-│   │
-│   ├── render/                module cg::render    RenderingData + to_rendering_data
-│   ├── half_edge/             module cg::half_edge   builder, topology, walks, flip, validate
-│   ├── geometry/              module cg::geometry     circumcenter, centroid, predicates
-│   ├── dual/                  module cg::dual         dual(source, positions) → mesh
-│   ├── hull/                  module cg::hull         2D monotone chain, 3D incremental
-│   ├── delaunay/              module cg::delaunay     Bowyer-Watson 2D, spherical via hull
-│   ├── voronoi/               module cg::voronoi      from_delaunay, in_polygon, in_box, on_sphere
-│   ├── graph/                 module cg::graph        VoronoiGraph (CSR), DelaunayGraph
-│   ├── triangulate/           module cg::triangulate  Ear clipping
-│   ├── subdivide/             module cg::subdivide    Loop subdivision
-│   └── primitives/            module cg::primitives   Icosphere, platonic solids
-└── test/
+src/
+├── cg.c3                  module cg;          umbrella
+├── types.c3               Vec aliases, HeIndex, FaceIndex, VertexIndex, Aabb
+├── half_edge_mesh.c3      HalfEdge, HalfEdgeFace, HalfEdgeVertex, HalfEdgeMesh structs
+├── faults.c3              Cross-cutting faults
+│
+├── render/                module cg::render    RenderingData + to_rendering_data
+├── half_edge/             module cg::half_edge   builder, topology, walks, flip, validate
+├── geometry/              module cg::geometry     circumcenter, centroid, predicates
+├── dual/                  module cg::dual         dual(source, positions) → mesh
+├── hull/                  module cg::hull         2D monotone chain, 3D incremental
+├── delaunay/              module cg::delaunay     Bowyer-Watson 2D, spherical via hull
+├── voronoi/               module cg::voronoi      from_delaunay, in_polygon, in_box, on_sphere
+├── graph/                 module cg::graph        VoronoiGraph (CSR), DelaunayGraph
+├── triangulate/           module cg::triangulate  Ear clipping
+├── subdivide/             module cg::subdivide    Loop subdivision
+└── primitives/            module cg::primitives   Icosphere, platonic solids
+test/
 ```
 
 ### Core Types
@@ -103,9 +102,9 @@ cg/
 typedef HeIndex     = inline int;
 typedef FaceIndex   = inline int;
 typedef VertexIndex = inline int;
-const HeIndex     INVALID_HE     = -1;
-const FaceIndex   INVALID_FACE   = -1;
-const VertexIndex INVALID_VERTEX = -1;
+const HeIndex     INVALID_HE     = (HeIndex)-1;
+const FaceIndex   INVALID_FACE   = (FaceIndex)-1;
+const VertexIndex INVALID_VERTEX = (VertexIndex)-1;
 ```
 
 **HalfEdgeMesh** — flat arrays, integer indices, no internal pointers:
@@ -163,7 +162,7 @@ struct DelaunayGraph {
 ## Commits
 
 Conventional Commits format: `<scope>: <imperative summary>` (e.g. `half_edge: add flip operation (M4)`).
-One logical change per commit. Run `c3c build linux && c3c test linux` before committing.
+One logical change per commit. Run `c3c build debug && c3c test` before committing.
 
 ## Documentation
 
@@ -194,7 +193,7 @@ Each milestone = commit(s) with tests. `c3c build && c3c test` green at every bo
 
 ## Open Questions (Resolved in M0)
 
-These were verified with `c3-expert` at c3c 0.7.11:
+These were verified with `c3-expert` during M0 on c3c 0.7.11 and rechecked as needed during the C3 0.8.0 migration:
 - [x] Vector type spelling: `float[<3>]` — used with local aliases (`Vec2f`, etc.)
 - [x] Methods on imported types: confirmed working with `smoke/smoke.c3` + test
 - [x] `project.json` shape for library — `static-lib` + `debug` + `release` targets

@@ -32,7 +32,7 @@ fn void copy_or_zero_source_uvs(HalfEdgeMesh* mesh, Vec2f[] out_uvs)
 fn int? choose_projection_axis(HalfEdgeMesh* mesh, Allocator alloc)
 {
     usz max_deg = max_face_degree(mesh);
-    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, (sz) max_deg);
     defer free(face_vertices);
 
     Vec3f normal_sum = { 0, 0, 0 };

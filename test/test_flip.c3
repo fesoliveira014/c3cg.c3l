@@ -53,7 +53,7 @@ fn void test_flip_boundary_faults() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, TRI_POSITIONS[..], TRI_INDICES[..])!!;
     defer mesh.destroy();
 
-    HeIndex boundary_he = 0;
+    HeIndex boundary_he = (HeIndex)0;
     HeIndex old_next = mesh.half_edges[boundary_he].next;
     VertexIndex old_origin = mesh.half_edges[boundary_he].origin;
     FaceIndex old_face = mesh.half_edges[boundary_he].face;
@@ -121,8 +121,8 @@ fn void test_flip_ok_on_interior_diamond() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
     defer mesh.destroy();
 
-    assert(mesh.twin(1) == 3);
-    assert(mesh.is_flip_ok(1));
+    assert(mesh.twin((HeIndex)1) == 3);
+    assert(mesh.is_flip_ok((HeIndex)1));
 }
 
 fn void test_flip_rewrites_diamond_diagonal() @test
@@ -130,14 +130,14 @@ fn void test_flip_rewrites_diamond_diagonal() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
     defer mesh.destroy();
 
-    mesh.flip(1)!!;
+    mesh.flip((HeIndex)1)!!;
 
     mesh.validate()!!;
-    assert(mesh.face_degree(0) == 3);
-    assert(mesh.face_degree(1) == 3);
-    assert(m4_undirected_edge_matches(&mesh, 1, 0, 3));
-    assert(m4_undirected_edge_matches(&mesh, mesh.twin(1), 0, 3));
-    assert(!m4_undirected_edge_matches(&mesh, 1, 1, 2));
+    assert(mesh.face_degree((FaceIndex)0) == 3);
+    assert(mesh.face_degree((FaceIndex)1) == 3);
+    assert(m4_undirected_edge_matches(&mesh, (HeIndex)1, (VertexIndex)0, (VertexIndex)3));
+    assert(m4_undirected_edge_matches(&mesh, mesh.twin((HeIndex)1), (VertexIndex)0, (VertexIndex)3));
+    assert(!m4_undirected_edge_matches(&mesh, (HeIndex)1, (VertexIndex)1, (VertexIndex)2));
 }
 
 fn void test_flip_refreshes_local_vertex_handles() @test
@@ -145,9 +145,9 @@ fn void test_flip_refreshes_local_vertex_handles() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
     defer mesh.destroy();
 
-    mesh.flip(1)!!;
+    mesh.flip((HeIndex)1)!!;
 
-    VertexIndex[4] vertices = { 0, 1, 2, 3 };
+    VertexIndex[4] vertices = { (VertexIndex)0, (VertexIndex)1, (VertexIndex)2, (VertexIndex)3 };
     foreach (v : vertices) {
         HeIndex handle = mesh.vertices[v].half_edge;
         assert(handle != cg::INVALID_HE);
@@ -161,17 +161,17 @@ fn void test_flip_back_restores_original_topology_equivalence() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, DIAMOND_POSITIONS[..], DIAMOND_INDICES[..])!!;
     defer mesh.destroy();
 
-    assert(m4_mesh_has_face_vertices(&mesh, 0, 1, 2));
-    assert(m4_mesh_has_face_vertices(&mesh, 1, 2, 3));
-    assert(m4_mesh_has_undirected_edge(&mesh, 1, 2));
+    assert(m4_mesh_has_face_vertices(&mesh, (VertexIndex)0, (VertexIndex)1, (VertexIndex)2));
+    assert(m4_mesh_has_face_vertices(&mesh, (VertexIndex)1, (VertexIndex)2, (VertexIndex)3));
+    assert(m4_mesh_has_undirected_edge(&mesh, (VertexIndex)1, (VertexIndex)2));
 
-    mesh.flip(1)!!;
-    mesh.flip(1)!!;
+    mesh.flip((HeIndex)1)!!;
+    mesh.flip((HeIndex)1)!!;
 
     mesh.validate()!!;
-    assert(m4_mesh_has_face_vertices(&mesh, 0, 1, 2));
-    assert(m4_mesh_has_face_vertices(&mesh, 1, 2, 3));
-    assert(m4_mesh_has_undirected_edge(&mesh, 1, 2));
+    assert(m4_mesh_has_face_vertices(&mesh, (VertexIndex)0, (VertexIndex)1, (VertexIndex)2));
+    assert(m4_mesh_has_face_vertices(&mesh, (VertexIndex)1, (VertexIndex)2, (VertexIndex)3));
+    assert(m4_mesh_has_undirected_edge(&mesh, (VertexIndex)1, (VertexIndex)2));
 }
 
 fn void test_flip_preserves_euler_counts() @test
@@ -183,7 +183,7 @@ fn void test_flip_preserves_euler_counts() @test
     usz half_edge_count = mesh.half_edges.len;
     usz face_count = mesh.faces.len;
 
-    mesh.flip(1)!!;
+    mesh.flip((HeIndex)1)!!;
 
     assert(mesh.vertices.len == vertex_count);
     assert(mesh.half_edges.len == half_edge_count);
@@ -204,7 +204,7 @@ fn void test_flip_preserves_counts_and_attributes() @test
     Vec3f normal_0 = mesh.normals[0];
     Vec2f uv_0 = mesh.uvs[0];
 
-    mesh.flip(1)!!;
+    mesh.flip((HeIndex)1)!!;
 
     assert(mesh.positions.len == positions_len);
     assert(mesh.normals.len == normals_len);
@@ -230,15 +230,15 @@ fn void test_flip_rejects_non_triangle_face() @test
     defer mesh.destroy();
     mesh.validate()!!;
 
-    assert(mesh.twin(0) == 3);
-    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, 0);
-    assert(!mesh.is_flip_ok(0));
-    if (catch err = mesh.flip(0)) {
+    assert(mesh.twin((HeIndex)0) == 3);
+    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, (HeIndex)0);
+    assert(!mesh.is_flip_ok((HeIndex)0));
+    if (catch err = mesh.flip((HeIndex)0)) {
         assert(err == cg::NON_TRIANGLE_FACE);
     } else {
         assert(false);
     }
-    m4_assert_half_edge_snapshot(&mesh, 0, before);
+    m4_assert_half_edge_snapshot(&mesh, (HeIndex)0, before);
     mesh.validate()!!;
 }
 
@@ -254,15 +254,15 @@ fn void test_flip_rejects_degenerate_output_endpoints() @test
     defer mesh.destroy();
     mesh.validate()!!;
 
-    assert(mesh.twin(0) == 3);
-    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, 0);
-    assert(!mesh.is_flip_ok(0));
-    if (catch err = mesh.flip(0)) {
+    assert(mesh.twin((HeIndex)0) == 3);
+    M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, (HeIndex)0);
+    assert(!mesh.is_flip_ok((HeIndex)0));
+    if (catch err = mesh.flip((HeIndex)0)) {
         assert(err == cg::DEGENERATE_INPUT);
     } else {
         assert(false);
     }
-    m4_assert_half_edge_snapshot(&mesh, 0, before);
+    m4_assert_half_edge_snapshot(&mesh, (HeIndex)0, before);
     mesh.validate()!!;
 }
 
@@ -272,9 +272,9 @@ fn void test_flip_rejects_duplicate_new_edge() @test
     defer mesh.destroy();
     mesh.validate()!!;
 
-    HeIndex he = 0;
+    HeIndex he = (HeIndex)0;
     assert(mesh.twin(he) == 5);
-    assert(m4_mesh_has_undirected_edge(&mesh, 2, 3));
+    assert(m4_mesh_has_undirected_edge(&mesh, (VertexIndex)2, (VertexIndex)3));
 
     M4HalfEdgeSnapshot before = m4_snapshot_half_edge(&mesh, he);
 

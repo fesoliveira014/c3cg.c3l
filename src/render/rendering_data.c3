@@ -66,15 +66,15 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
 
     RenderingData data;
 
-    data.vertices = mem::alloc::new_array(alloc, Vec3f, mesh.positions.len);
+    data.vertices = mem::alloc::new_array(alloc, Vec3f, (sz) mesh.positions.len);
     defer catch free(data.vertices);
-    data.indices = mem::alloc::new_array(alloc, uint, triangle_count * 3);
+    data.indices = mem::alloc::new_array(alloc, uint, (sz) triangle_count * 3);
     defer catch free(data.indices);
 
     if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SOURCE) {
-        data.normals = mem::alloc::new_array(alloc, Vec3f, mesh.positions.len);
+        data.normals = mem::alloc::new_array(alloc, Vec3f, (sz) mesh.positions.len);
     } else if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SMOOTH) {
-        data.normals = mem::alloc::new_array(alloc, Vec3f, mesh.positions.len);
+        data.normals = mem::alloc::new_array(alloc, Vec3f, (sz) mesh.positions.len);
     } else {
         data.normals = mem::alloc::new_array(alloc, Vec3f, 0);
     }
@@ -83,13 +83,13 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
     if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE ||
         options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO ||
         options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
-        data.uvs = mem::alloc::new_array(alloc, Vec2f, mesh.positions.len);
+        data.uvs = mem::alloc::new_array(alloc, Vec2f, (sz) mesh.positions.len);
     } else {
         data.uvs = mem::alloc::new_array(alloc, Vec2f, 0);
     }
     defer catch free(data.uvs);
 
-    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, (sz) max_deg);
     defer free(face_vertices);
 
     for (usz i = 0; i < mesh.positions.len; i++) {
@@ -134,29 +134,29 @@ fn RenderingData? build_flat_rendering_data(HalfEdgeMesh* mesh, Allocator alloc,
 
     RenderingData data;
 
-    data.vertices = mem::alloc::new_array(alloc, Vec3f, expanded_count);
+    data.vertices = mem::alloc::new_array(alloc, Vec3f, (sz) expanded_count);
     defer catch free(data.vertices);
-    data.indices = mem::alloc::new_array(alloc, uint, expanded_count);
+    data.indices = mem::alloc::new_array(alloc, uint, (sz) expanded_count);
     defer catch free(data.indices);
-    data.normals = mem::alloc::new_array(alloc, Vec3f, expanded_count);
+    data.normals = mem::alloc::new_array(alloc, Vec3f, (sz) expanded_count);
     defer catch free(data.normals);
 
     if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE ||
         options.uv_mode == (uint)RenderUvMode.RENDER_UV_SOURCE_OR_ZERO ||
         options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
-        data.uvs = mem::alloc::new_array(alloc, Vec2f, expanded_count);
+        data.uvs = mem::alloc::new_array(alloc, Vec2f, (sz) expanded_count);
     } else {
         data.uvs = mem::alloc::new_array(alloc, Vec2f, 0);
     }
     defer catch free(data.uvs);
 
     usz max_deg = max_face_degree(mesh);
-    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, (sz) max_deg);
     defer free(face_vertices);
 
     Vec2f[] shared_uvs = {};
     if (options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
-        shared_uvs = mem::alloc::new_array(alloc, Vec2f, mesh.positions.len);
+        shared_uvs = mem::alloc::new_array(alloc, Vec2f, (sz) mesh.positions.len);
         project_planar_uvs(mesh, alloc, shared_uvs)!;
     }
     defer free(shared_uvs);

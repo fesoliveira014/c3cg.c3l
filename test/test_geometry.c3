@@ -278,7 +278,7 @@ fn void test_face_centroid_triangle_average() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
     defer mesh.destroy();
 
-    Vec3f centroid = geometry::face_centroid(&mesh, 0)!!;
+    Vec3f centroid = geometry::face_centroid(&mesh, (FaceIndex)0)!!;
     assert(m5_vec3_approx(centroid, { 1, 1, 0 }));
 }
 
@@ -295,7 +295,7 @@ fn void test_face_centroid_quad_vertex_average() @test
     HalfEdgeMesh mesh = half_edge::from_polygons(mem, positions[..], offsets[..], indices[..])!!;
     defer mesh.destroy();
 
-    Vec3f centroid = geometry::face_centroid(&mesh, 0)!!;
+    Vec3f centroid = geometry::face_centroid(&mesh, (FaceIndex)0)!!;
     assert(m5_vec3_approx(centroid, { 1, 1, 0 }));
 }
 
@@ -310,7 +310,7 @@ fn void test_face_centroid_invalid_face_faults() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, positions[..], indices[..])!!;
     defer mesh.destroy();
 
-    if (catch err = geometry::face_centroid(&mesh, 99)) {
+    if (catch err = geometry::face_centroid(&mesh, (FaceIndex)99)) {
         assert(err == cg::INVALID_FACE_REFERENCE);
         return;
     }
@@ -353,6 +353,6 @@ fn void test_face_centroid_scalar_matches_batch() @test
     Vec3f[] batch = geometry::face_centroids(mem, &mesh)!!;
     defer free(batch);
 
-    Vec3f scalar = geometry::face_centroid(&mesh, 0)!!;
+    Vec3f scalar = geometry::face_centroid(&mesh, (FaceIndex)0)!!;
     assert(m5_vec3_approx(scalar, batch[0]));
 }

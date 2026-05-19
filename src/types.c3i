@@ -10,9 +10,9 @@ alias Vec4f = float[<4>];
 alias Vec2i = int[<2>];
 alias Vec3i = int[<3>];
 
-const HeIndex     INVALID_HE     = -1;
-const FaceIndex   INVALID_FACE   = -1;
-const VertexIndex INVALID_VERTEX = -1;
+const HeIndex     INVALID_HE     = (HeIndex)-1;
+const FaceIndex   INVALID_FACE   = (FaceIndex)-1;
+const VertexIndex INVALID_VERTEX = (VertexIndex)-1;
 
 struct Aabb {
     Vec3f min;

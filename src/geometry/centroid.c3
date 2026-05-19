@@ -47,7 +47,7 @@ fn Vec3f[]? face_centroids(Allocator alloc, HalfEdgeMesh* mesh)
 {
     mesh.validate()!;
 
-    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, mesh.faces.len);
+    Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, (sz) mesh.faces.len);
     defer catch free(out);
 
     for (usz i = 0; i < mesh.faces.len; i++) {

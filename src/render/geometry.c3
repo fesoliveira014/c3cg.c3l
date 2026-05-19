@@ -103,7 +103,7 @@ fn Vec3f? face_normal(HalfEdgeMesh* mesh, FaceIndex face, VertexIndex[] scratch)
 fn void? validate_polygon_planarity(HalfEdgeMesh* mesh, Allocator alloc, float epsilon)
 {
     usz max_deg = max_face_degree(mesh);
-    VertexIndex[] scratch = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    VertexIndex[] scratch = mem::alloc::new_array(alloc, VertexIndex, (sz) max_deg);
     defer free(scratch);
 
     for (usz f = 0; f < mesh.faces.len; f++) {
@@ -137,7 +137,7 @@ fn void? validate_all_faces_triangular_and_non_degenerate_if_flat(
     if (options.normal_mode != (uint)RenderNormalMode.RENDER_NORMAL_FLAT) return;
 
     usz max_deg = max_face_degree(mesh);
-    VertexIndex[] scratch = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    VertexIndex[] scratch = mem::alloc::new_array(alloc, VertexIndex, (sz) max_deg);
     defer free(scratch);
 
     for (usz f = 0; f < mesh.faces.len; f++) {

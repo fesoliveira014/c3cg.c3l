@@ -67,14 +67,14 @@ fn void? generate_smooth_normals(HalfEdgeMesh* mesh, Allocator alloc, Vec3f[] ou
     usz vertex_count = mesh.positions.len;
     usz max_deg = max_face_degree(mesh);
 
-    Vec3f[] accum = mem::alloc::new_array(alloc, Vec3f, vertex_count);
+    Vec3f[] accum = mem::alloc::new_array(alloc, Vec3f, (sz) vertex_count);
     defer free(accum);
 
     for (usz i = 0; i < vertex_count; i++) {
         accum[i] = { 0, 0, 0 };
     }
 
-    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, max_deg);
+    VertexIndex[] face_vertices = mem::alloc::new_array(alloc, VertexIndex, (sz) max_deg);
     defer free(face_vertices);
 
     for (usz f = 0; f < mesh.faces.len; f++) {

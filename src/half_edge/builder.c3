@@ -39,21 +39,21 @@ fn HalfEdgeMesh? from_triangles_with_attrs(
     usz half_edge_count = indices.len;
 
     HalfEdgeMesh mesh;
-    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, half_edge_count);
+    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, (sz) half_edge_count);
     defer catch free(mesh.half_edges);
-    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, face_count);
+    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, (sz) face_count);
     defer catch free(mesh.faces);
-    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, positions.len);
+    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, (sz) positions.len);
     defer catch free(mesh.vertices);
-    mesh.positions = mem::alloc::new_array(alloc, Vec3f, positions.len);
+    mesh.positions = mem::alloc::new_array(alloc, Vec3f, (sz) positions.len);
     defer catch free(mesh.positions);
 
     if (normals.len > 0) {
-        mesh.normals = mem::alloc::new_array(alloc, Vec3f, normals.len);
+        mesh.normals = mem::alloc::new_array(alloc, Vec3f, (sz) normals.len);
         defer catch free(mesh.normals);
     }
     if (uvs.len > 0) {
-        mesh.uvs = mem::alloc::new_array(alloc, Vec2f, uvs.len);
+        mesh.uvs = mem::alloc::new_array(alloc, Vec2f, (sz) uvs.len);
         defer catch free(mesh.uvs);
     }
 
@@ -131,13 +131,13 @@ fn HalfEdgeMesh? from_polygons(Allocator alloc, Vec3f[] positions, uint[] face_o
     }
 
     HalfEdgeMesh mesh;
-    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, half_edge_count);
+    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, (sz) half_edge_count);
     defer catch free(mesh.half_edges);
-    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, face_count);
+    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, (sz) face_count);
     defer catch free(mesh.faces);
-    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, positions.len);
+    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, (sz) positions.len);
     defer catch free(mesh.vertices);
-    mesh.positions = mem::alloc::new_array(alloc, Vec3f, positions.len);
+    mesh.positions = mem::alloc::new_array(alloc, Vec3f, (sz) positions.len);
     defer catch free(mesh.positions);
 
     for (usz i = 0; i < mesh.vertices.len; i++) {

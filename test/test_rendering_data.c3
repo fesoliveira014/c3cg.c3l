@@ -16,10 +16,10 @@ fn bool float_approx(float a, float b)
 fn void test_render_destroy_zeroes_data() @test
 {
     RenderingData data;
-    data.vertices = mem::alloc::new_array(mem, Vec3f, 1);
-    data.indices = mem::alloc::new_array(mem, uint, 1);
-    data.normals = mem::alloc::new_array(mem, Vec3f, 1);
-    data.uvs = mem::alloc::new_array(mem, Vec2f, 1);
+    data.vertices = mem::alloc::new_array(mem, Vec3f, (sz) 1);
+    data.indices = mem::alloc::new_array(mem, uint, (sz) 1);
+    data.normals = mem::alloc::new_array(mem, Vec3f, (sz) 1);
+    data.uvs = mem::alloc::new_array(mem, Vec2f, (sz) 1);
 
     data.destroy();
 
@@ -207,7 +207,7 @@ fn void test_render_invalid_mesh_returns_validation_fault() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
     defer mesh.destroy();
 
-    mesh.half_edges[0].next = -2;
+    mesh.half_edges[0].next = (HeIndex)-2;
 
     if (catch err = mesh.to_rendering_data(mem)) {
         assert(err == cg::INVALID_HALF_EDGE_REFERENCE);

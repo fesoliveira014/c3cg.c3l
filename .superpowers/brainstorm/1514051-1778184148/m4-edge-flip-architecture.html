@@ -1,0 +1,71 @@
+<h2>M4 Edge Flip: Local Topology Rewrite</h2>
+<p class="subtitle">Recommended design: validate first, then rewrite only the two adjacent triangle cycles and refresh the four local vertex handles.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Before: diagonal a→b / b→a</div>
+    <div class="mockup-body">
+      <svg viewBox="0 0 420 300" width="100%" height="300" role="img" aria-label="Before edge flip diagram">
+        <defs>
+          <marker id="arrowA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L6,3 z" fill="#8fd3ff" />
+          </marker>
+          <marker id="arrowB" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L6,3 z" fill="#ffcf70" />
+          </marker>
+        </defs>
+        <circle cx="95" cy="150" r="8" fill="#f7f7f7"/><text x="78" y="145" fill="#f7f7f7">c</text>
+        <circle cx="325" cy="150" r="8" fill="#f7f7f7"/><text x="338" y="145" fill="#f7f7f7">d</text>
+        <circle cx="210" cy="55" r="8" fill="#f7f7f7"/><text x="218" y="50" fill="#f7f7f7">a</text>
+        <circle cx="210" cy="245" r="8" fill="#f7f7f7"/><text x="218" y="260" fill="#f7f7f7">b</text>
+        <line x1="210" y1="55" x2="210" y2="245" stroke="#8fd3ff" stroke-width="4" marker-end="url(#arrowA)"/>
+        <line x1="210" y1="245" x2="210" y2="55" stroke="#ffcf70" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowB)"/>
+        <line x1="210" y1="245" x2="95" y2="150" stroke="#8fd3ff" stroke-width="2" marker-end="url(#arrowA)"/>
+        <line x1="95" y1="150" x2="210" y2="55" stroke="#8fd3ff" stroke-width="2" marker-end="url(#arrowA)"/>
+        <line x1="210" y1="55" x2="325" y2="150" stroke="#ffcf70" stroke-width="2" marker-end="url(#arrowB)"/>
+        <line x1="325" y1="150" x2="210" y2="245" stroke="#ffcf70" stroke-width="2" marker-end="url(#arrowB)"/>
+        <text x="183" y="135" fill="#8fd3ff">he</text>
+        <text x="222" y="170" fill="#ffcf70">twin</text>
+        <text x="118" y="113" fill="#8fd3ff">face f0</text>
+        <text x="260" y="113" fill="#ffcf70">face f1</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">After: diagonal c→d / d→c</div>
+    <div class="mockup-body">
+      <svg viewBox="0 0 420 300" width="100%" height="300" role="img" aria-label="After edge flip diagram">
+        <defs>
+          <marker id="arrowC" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L6,3 z" fill="#8fd3ff" />
+          </marker>
+          <marker id="arrowD" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L6,3 z" fill="#ffcf70" />
+          </marker>
+        </defs>
+        <circle cx="95" cy="150" r="8" fill="#f7f7f7"/><text x="78" y="145" fill="#f7f7f7">c</text>
+        <circle cx="325" cy="150" r="8" fill="#f7f7f7"/><text x="338" y="145" fill="#f7f7f7">d</text>
+        <circle cx="210" cy="55" r="8" fill="#f7f7f7"/><text x="218" y="50" fill="#f7f7f7">a</text>
+        <circle cx="210" cy="245" r="8" fill="#f7f7f7"/><text x="218" y="260" fill="#f7f7f7">b</text>
+        <line x1="95" y1="150" x2="325" y2="150" stroke="#8fd3ff" stroke-width="4" marker-end="url(#arrowC)"/>
+        <line x1="325" y1="150" x2="95" y2="150" stroke="#ffcf70" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrowD)"/>
+        <line x1="325" y1="150" x2="210" y2="245" stroke="#8fd3ff" stroke-width="2" marker-end="url(#arrowC)"/>
+        <line x1="210" y1="245" x2="95" y2="150" stroke="#8fd3ff" stroke-width="2" marker-end="url(#arrowC)"/>
+        <line x1="95" y1="150" x2="210" y2="55" stroke="#ffcf70" stroke-width="2" marker-end="url(#arrowD)"/>
+        <line x1="210" y1="55" x2="325" y2="150" stroke="#ffcf70" stroke-width="2" marker-end="url(#arrowD)"/>
+        <text x="190" y="140" fill="#8fd3ff">he</text>
+        <text x="190" y="174" fill="#ffcf70">twin</text>
+        <text x="150" y="220" fill="#8fd3ff">face f0</text>
+        <text x="150" y="92" fill="#ffcf70">face f1</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Local rewire table</h3>
+  <p><code>h0 = he(a→b), h1 = h0.next(b→c), h2 = h1.next(c→a)</code></p>
+  <p><code>t0 = h0.twin(b→a), t1 = t0.next(a→d), t2 = t1.next(d→b)</code></p>
+  <p>After flip: <code>h0: c→d</code>, <code>t0: d→c</code>, face f0 cycle <code>h0 → t2 → h1</code>, face f1 cycle <code>t0 → h2 → t1</code>.</p>
+</div>

@@ -73,7 +73,7 @@ fn void test_from_to_face_boundary_degree() @test
     assert(mesh.to_vertex(he) == 1);
     assert(mesh.face_of(he) == 0);
     assert(mesh.is_boundary(he));
-    assert(mesh.face_degree(0) == 3);
+    assert(mesh.face_degree((FaceIndex)0) == 3);
 }
 
 fn void test_single_triangle_boundary_edges() @test
@@ -94,41 +94,41 @@ fn void test_diamond_topology() @test
     assert(mesh.faces.len == 2);
     assert(mesh.half_edges.len == 6);
 
-    assert(mesh.twin(1) == 3);
-    assert(mesh.twin(3) == 1);
+    assert(mesh.twin((HeIndex)1) == 3);
+    assert(mesh.twin((HeIndex)3) == 1);
 
-    assert(mesh.is_boundary(0));
-    assert(mesh.is_boundary(2));
-    assert(mesh.is_boundary(4));
-    assert(mesh.is_boundary(5));
+    assert(mesh.is_boundary((HeIndex)0));
+    assert(mesh.is_boundary((HeIndex)2));
+    assert(mesh.is_boundary((HeIndex)4));
+    assert(mesh.is_boundary((HeIndex)5));
 
-    assert(!mesh.is_boundary(1));
-    assert(!mesh.is_boundary(3));
+    assert(!mesh.is_boundary((HeIndex)1));
+    assert(!mesh.is_boundary((HeIndex)3));
 
-    assert(mesh.face_of(0) == 0);
-    assert(mesh.face_of(1) == 0);
-    assert(mesh.face_of(2) == 0);
-    assert(mesh.face_of(3) == 1);
-    assert(mesh.face_of(4) == 1);
-    assert(mesh.face_of(5) == 1);
+    assert(mesh.face_of((HeIndex)0) == 0);
+    assert(mesh.face_of((HeIndex)1) == 0);
+    assert(mesh.face_of((HeIndex)2) == 0);
+    assert(mesh.face_of((HeIndex)3) == 1);
+    assert(mesh.face_of((HeIndex)4) == 1);
+    assert(mesh.face_of((HeIndex)5) == 1);
 
-    assert(mesh.from_vertex(0) == 0);
-    assert(mesh.to_vertex(0) == 1);
-    assert(mesh.from_vertex(1) == 1);
-    assert(mesh.to_vertex(1) == 2);
-    assert(mesh.from_vertex(2) == 2);
-    assert(mesh.to_vertex(2) == 0);
+    assert(mesh.from_vertex((HeIndex)0) == 0);
+    assert(mesh.to_vertex((HeIndex)0) == 1);
+    assert(mesh.from_vertex((HeIndex)1) == 1);
+    assert(mesh.to_vertex((HeIndex)1) == 2);
+    assert(mesh.from_vertex((HeIndex)2) == 2);
+    assert(mesh.to_vertex((HeIndex)2) == 0);
 
-    assert(mesh.next(0) == 1);
-    assert(mesh.next(1) == 2);
-    assert(mesh.next(2) == 0);
+    assert(mesh.next((HeIndex)0) == 1);
+    assert(mesh.next((HeIndex)1) == 2);
+    assert(mesh.next((HeIndex)2) == 0);
 
-    assert(mesh.prev(0) == 2);
-    assert(mesh.prev(1) == 0);
-    assert(mesh.prev(2) == 1);
+    assert(mesh.prev((HeIndex)0) == 2);
+    assert(mesh.prev((HeIndex)1) == 0);
+    assert(mesh.prev((HeIndex)2) == 1);
 
-    assert(mesh.face_degree(0) == 3);
-    assert(mesh.face_degree(1) == 3);
+    assert(mesh.face_degree((FaceIndex)0) == 3);
+    assert(mesh.face_degree((FaceIndex)1) == 3);
 }
 
 fn void test_tetrahedron_no_boundary_edges() @test
