@@ -680,7 +680,7 @@ The milestones are ordered so that each builds only on what came before. The dep
 
 ### M0 — Project scaffolding
 
-- [ ] `c3-expert`: confirm version pin in `.claude/c3-skill.json`.
+- [x] `c3-expert`: confirm version pin in `.claude/c3-skill.json`.
 - [ ] `c3-expert`: confirm method-on-imported-type works (declare `fn int Foo.bar(&self)` from a different module than `Foo`'s defining module). One-line smoke test before committing to the architecture.
 - [ ] `project.json` with module name `cg`, debug + release targets, test target.
 - [ ] `src/cg.c3` umbrella, `src/types.c3` with vector aliases, identifier typedefs, `INVALID_*`, `Aabb`.
@@ -691,7 +691,7 @@ The milestones are ordered so that each builds only on what came before. The dep
 
 ### M1 — Half-edge construction and queries
 
-- [ ] `src/half_edge/builder.c3` — `from_triangles`, `from_triangles_with_attrs`, hash-map twin-pairing pass, fault paths.
+- [x] `src/half_edge/builder.c3` — `from_triangles`, `from_triangles_with_attrs`, hash-map twin-pairing pass, fault paths.
 - [ ] `src/half_edge/topology.c3` — `twin`, `next`, `prev`, `from_vertex`, `to_vertex`, `face_of`, `is_boundary`, `face_degree`.
 - [ ] `HalfEdgeMesh.destroy(&self)` (probably in `builder.c3` since it pairs with construction).
 - [ ] `test/test_builder.c3` — single tetrahedron round-trip; degenerate-input fault paths exhaustively (empty, count mismatch, out-of-range index, duplicate edge).
@@ -700,27 +700,27 @@ The milestones are ordered so that each builds only on what came before. The dep
 
 ### M2 — Walks and validation
 
-- [ ] `src/half_edge/walks.c3` — `vertex_one_ring_outgoing`, `vertex_one_ring_faces`, `face_half_edges`, `face_vertices`. Caller-supplied scratch buffers.
+- [x] `src/half_edge/walks.c3` — `vertex_one_ring_outgoing`, `vertex_one_ring_faces`, `face_half_edges`, `face_vertices`. Caller-supplied scratch buffers.
 - [ ] `src/half_edge/validate.c3` — `validate(&self)` checks invariants 1–4 from §4.5; returns first violation as a fault.
 - [ ] `test/test_walks.c3` — one-ring on tetrahedron (every vertex degree 3) and on a hand-built degree-5 vertex; validate returns OK on a known-good mesh and the right fault on a doctored bad one.
 - [ ] `c3c build && c3c test` green.
 
 ### M3 — Rendering data
 
-- [ ] `src/render/rendering_data.c3` — `RenderingData` struct + `destroy` + `to_rendering_data` triangular path + polygonal fan path.
+- [x] `src/render/rendering_data.c3` — `RenderingData` struct + `destroy` + `to_rendering_data` triangular path + polygonal fan path.
 - [ ] Generated face-averaged normals when `mesh.normals.len == 0`; zero-fill UVs when absent.
 - [ ] `test/test_render.c3` — round-trip from triangle soup; index count = `3 * faces.len` for triangular; generated normals unit-length and outward on tetrahedron; polygonal-face triangulation correct for a hand-built quad.
 - [ ] `c3c build && c3c test` green.
 
 ### M4 — Edge flipping
 
-- [ ] `src/half_edge/flip.c3` — `is_flip_ok`, `flip`. Six-rewire ported from Godot. No external index buffer rewrite. Triangle check faults `NON_TRIANGLE_FACE`.
+- [x] `src/half_edge/flip.c3` — `is_flip_ok`, `flip`. Six-rewire ported from Godot. No external index buffer rewrite. Triangle check faults `NON_TRIANGLE_FACE`.
 - [ ] `test/test_flip.c3` — diamond fixture: flip works; flipping back returns to original; boundary faults; would-create-duplicate faults; non-triangle face faults; Euler characteristic preserved.
 - [ ] `c3c build && c3c test` green.
 
 ### M5 — Geometry helpers
 
-- [ ] `src/geometry/circumcenter.c3` — `circumcenter_planar`, `circumcenter_on_sphere`, `circumcenters_planar(mesh)`, `circumcenters_on_sphere(mesh, r)`.
+- [x] `src/geometry/circumcenter.c3` — `circumcenter_planar`, `circumcenter_on_sphere`, `circumcenters_planar(mesh)`, `circumcenters_on_sphere(mesh, r)`.
 - [ ] `src/geometry/centroid.c3` — `face_centroid`, `face_centroids(mesh)`.
 - [ ] `src/geometry/predicates.c3` — `orient_2d`, `in_circle_2d`, `on_sphere` (non-robust v1).
 - [ ] `test/test_geometry.c3` — known circumcentres of equilateral triangle (planar and spherical); centroid of a known polygon; predicate signs on hand-built cases.
@@ -728,12 +728,12 @@ The milestones are ordered so that each builds only on what came before. The dep
 
 ### M6 — Dual operation
 
-- [ ] `src/dual/dual.c3` — `dual(source, dual_positions)` and the three convenience wrappers.
-- [ ] Faults: `DUAL_VERTEX_COUNT_MISMATCH`, `DUAL_REQUIRES_CLOSED_MESH`.
-- [ ] Tests on a closed source mesh: dual of an icosahedron is a dodecahedron (each vertex of the icosa becomes a 5-gon face in the dual, by inspection).
-- [ ] Round-trip property test: `dual(dual(M, A), B)` topologically equals `M` (vertex/face/half-edge counts; correspondence by index).
-- [ ] `test/test_dual.c3` — dual of icosahedron, double-dual round-trip, mismatched vertex array faults, open-mesh faults.
-- [ ] `c3c build && c3c test` green.
+- [x] `src/dual/dual.c3` — `dual(mesh, mode)` with `DualMode` enum and `dual_from_vertices(mesh, positions)` raw path.
+- [x] Faults: `DUAL_VERTEX_COUNT_MISMATCH`, `DUAL_REQUIRES_CLOSED_MESH`.
+- [x] Tests on a closed source mesh: dual of an icosahedron is a dodecahedron (each vertex of the icosa becomes a 5-gon face in the dual, by inspection).
+- [x] Round-trip property test: `dual(dual(M, A), B)` topologically equals `M` (vertex/face/half-edge counts; correspondence by index).
+- [x] `test/test_dual.c3` — dual of icosahedron, double-dual round-trip, mismatched vertex array faults, open-mesh faults.
+- [x] `c3c build && c3c test` green.
 
 ### M7 — Convex hull 2D
 
