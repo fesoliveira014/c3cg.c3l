@@ -360,7 +360,12 @@ fn void test_dual_mode_spherical() @test
     HalfEdgeMesh ico = half_edge::from_triangles(mem, ICO_POSITIONS[..], ICO_INDICES[..])!!;
     defer ico.destroy();
 
-    HalfEdgeMesh dual_mesh = dual::dual(mem, &ico, dual::DualMode.SPHERICAL_CIRCUMCENTER, 1.0f)!!;
+    HalfEdgeMesh dual_mesh = dual::dual(
+        alloc:  mem,
+        mesh:   &ico,
+        mode:   dual::DualMode.SPHERICAL_CIRCUMCENTER,
+        radius: 1.0f,
+    )!!;
     defer dual_mesh.destroy();
 
     assert(dual_mesh.vertices.len == 20);
@@ -395,7 +400,12 @@ fn void test_dual_spherical_radius_zero_faults() @test
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, tet_positions[..], tet_indices[..])!!;
     defer mesh.destroy();
 
-    if (catch err = dual::dual(mem, &mesh, dual::DualMode.SPHERICAL_CIRCUMCENTER, 0.0f)) {
+    if (catch err = dual::dual(
+            alloc:  mem,
+            mesh:   &mesh,
+            mode:   dual::DualMode.SPHERICAL_CIRCUMCENTER,
+            radius: 0.0f,
+        )) {
         assert(err == cg::DEGENERATE_INPUT);
         return;
     }

@@ -3,15 +3,16 @@ import cg;
 import cg::half_edge;
 import cg::geometry;
 
+const usz DUAL_SCRATCH_INITIAL = 3;
+const usz DUAL_SCRATCH_GROWTH = 2;
+const float DUAL_DEFAULT_RADIUS = 1.0f;
+
 enum DualMode : uint
 {
     CIRCUMCENTER,
     CENTROID,
     SPHERICAL_CIRCUMCENTER,
 }
-
-const usz DUAL_SCRATCH_INITIAL = 3;
-const usz DUAL_SCRATCH_GROWTH = 2;
 
 fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] dual_vertex_positions)
 {
@@ -37,8 +38,9 @@ fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[]
             if (catch err = result) {
                 if (err == cg::OUTPUT_BUFFER_TOO_SMALL) {
                     usz new_cap = scratch.len * DUAL_SCRATCH_GROWTH;
+                    FaceIndex[] new_scratch = mem::alloc::new_array(alloc, FaceIndex, (sz) new_cap);
                     free(scratch);
-                    scratch = mem::alloc::new_array(alloc, FaceIndex, (sz) new_cap);
+                    scratch = new_scratch;
                     continue;
                 }
                 return err~;
@@ -59,14 +61,19 @@ fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[]
         }
     }
 
-    HalfEdgeMesh result = half_edge::from_polygons(alloc, dual_vertex_positions, face_offsets, face_indices)!;
+    HalfEdgeMesh result = half_edge::from_polygons(
+        alloc:              alloc,
+        positions:          dual_vertex_positions,
+        face_offsets:       face_offsets,
+        face_indices:       face_indices,
+    )!;
 
     free(face_offsets);
     free(face_indices);
     return result;
 }
 
-fn HalfEdgeMesh? dual(Allocator alloc, HalfEdgeMesh* mesh, DualMode mode = DualMode.CIRCUMCENTER, float radius = 1.0f)
+fn HalfEdgeMesh? dual(Allocator alloc, HalfEdgeMesh* mesh, DualMode mode = DualMode.CIRCUMCENTER, float radius = DUAL_DEFAULT_RADIUS)
 {
     Vec3f[] positions;
     switch (mode) {
