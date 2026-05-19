@@ -304,3 +304,28 @@ fn void test_dual_from_vertices_raw() @test
     assert(dual_mesh.positions[3].z == 333);
     dual_mesh.validate()!!;
 }
+
+fn void test_dual_mode_circumcenter() @test
+{
+    Vec3f[4] tet_positions = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 1 },
+    };
+    uint[12] tet_indices = {
+        0, 1, 2,
+        0, 3, 1,
+        0, 2, 3,
+        1, 3, 2,
+    };
+    HalfEdgeMesh mesh = half_edge::from_triangles(mem, tet_positions[..], tet_indices[..])!!;
+    defer mesh.destroy();
+
+    HalfEdgeMesh dual_mesh = dual::dual(mem, &mesh, dual::DualMode.CIRCUMCENTER)!!;
+    defer dual_mesh.destroy();
+
+    assert(dual_mesh.vertices.len == 4);
+    assert(dual_mesh.faces.len == 4);
+    dual_mesh.validate()!!;
+}

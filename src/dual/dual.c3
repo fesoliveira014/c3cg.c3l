@@ -1,6 +1,7 @@
 module cg::dual;
 import cg;
 import cg::half_edge;
+import cg::geometry;
 
 fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] dual_vertex_positions)
 {
@@ -57,4 +58,26 @@ fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[]
     free(face_offsets);
     free(face_indices);
     return result;
+}
+
+enum DualMode : uint
+{
+    CIRCUMCENTER,
+    CENTROID,
+    SPHERICAL_CIRCUMCENTER,
+}
+
+fn HalfEdgeMesh? dual(Allocator alloc, HalfEdgeMesh* mesh, DualMode mode = DualMode.CIRCUMCENTER, float radius = 1.0f)
+{
+    Vec3f[] positions;
+    switch (mode) {
+        case DualMode.CIRCUMCENTER:
+            positions = geometry::circumcenters_planar(alloc, mesh)!;
+        case DualMode.CENTROID:
+            positions = geometry::face_centroids(alloc, mesh)!;
+        case DualMode.SPHERICAL_CIRCUMCENTER:
+            positions = geometry::circumcenters_on_sphere(alloc, mesh, radius)!;
+    }
+    defer free(positions);
+    return dual_from_vertices(alloc, mesh, positions)!;
 }
