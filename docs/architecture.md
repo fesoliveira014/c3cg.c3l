@@ -16,7 +16,7 @@ The library targets C3 0.8.0 (pinned in `.claude/c3-skill.json`). Style follows 
 
 Provide idiomatic C3 APIs for the standard computational-geometry workhorses — Delaunay triangulation, Voronoi diagrams, convex hull, polygon triangulation, mesh subdivision, edge operations — all built on top of one shared half-edge mesh data structure that handles both triangular and polygonal cases. Output is renderable: every mesh-like type produces a `RenderingData` (vertices, indices, normals, uvs) suitable for direct upload to a GPU.
 
-The half-edge mesh ports the *structure* of `half_edge_mesh.gd` (Godot, GDScript) into idiomatic C3, replacing object references with integer indices into flat arrays.
+The half-edge mesh ports the _structure_ of `half_edge_mesh.gd` (Godot, GDScript) into idiomatic C3, replacing object references with integer indices into flat arrays.
 
 The library handles three geometric domains uniformly:
 
@@ -49,7 +49,7 @@ This unifies Delaunay↔Voronoi duality: the dual of a triangular mesh is a poly
 
 ### 2.3 Fault discipline (style §10)
 
-No `null` returns, no sentinel `-1` outside the documented `INVALID_INDEX` constant for "this slot is unoccupied", no `bool ok` out-params. Fallible operations return optionals carrying *granular* faults — `NON_TRIANGLE_FACE`, `BOUNDARY_HALF_EDGE`, `FLIP_NOT_ALLOWED`, `OPEN_CELL_ON_BOUNDARY` — never an umbrella `INVALID_INPUT`.
+No `null` returns, no sentinel `-1` outside the documented `INVALID_INDEX` constant for "this slot is unoccupied", no `bool ok` out-params. Fallible operations return optionals carrying _granular_ faults — `NON_TRIANGLE_FACE`, `BOUNDARY_HALF_EDGE`, `FLIP_NOT_ALLOWED`, `OPEN_CELL_ON_BOUNDARY` — never an umbrella `INVALID_INPUT`.
 
 ### 2.4 Method syntax for type APIs
 
@@ -330,7 +330,7 @@ The duality is symmetric. `cg::voronoi::to_delaunay(diagram)` reconstructs the D
 
 ### 4.8 `VoronoiGraph` and `DelaunayGraph` (`src/graph/`)
 
-Flat per-cell / per-triangle views over the canonical mesh-based representations. Both are *snapshots* — built by an explicit constructor from a `VoronoiDiagram` or `HalfEdgeMesh`, owned independently, not auto-invalidated by changes to the source. Once built, the graph carries everything needed for read-only iteration and the source can be discarded.
+Flat per-cell / per-triangle views over the canonical mesh-based representations. Both are _snapshots_ — built by an explicit constructor from a `VoronoiDiagram` or `HalfEdgeMesh`, owned independently, not auto-invalidated by changes to the source. Once built, the graph carries everything needed for read-only iteration and the source can be discarded.
 
 These graphs are the answer to "I want a `Cell[]` I can iterate without walking half-edges". The Godot `CellMesh`/`Cell` pair is the prototype. Internal layout is still flat-array + indices (no per-cell allocations); the view methods provide the per-cell ergonomic access.
 
@@ -459,7 +459,7 @@ Faults on either:
 - `DUPLICATE_HALF_EDGE` if two faces produce the same directed half-edge (non-manifold or wrongly-oriented input).
 - `EMPTY_INPUT` for empty positions or indices.
 
-The implementation mirrors the Godot `from_triangle_mesh`: build half-edges per face, register `(origin, dest) → he_index` in a hash map, second pass pairs twins by reversed-edge lookup. Differences from the Godot version: catch duplicates as faults rather than logging and continuing; vertex `half_edge` field set to the *first* outgoing edge encountered and never overwritten, so vertex one-ring walks are deterministic.
+The implementation mirrors the Godot `from_triangle_mesh`: build half-edges per face, register `(origin, dest) → he_index` in a hash map, second pass pairs twins by reversed-edge lookup. Differences from the Godot version: catch duplicates as faults rather than logging and continuing; vertex `half_edge` field set to the _first_ outgoing edge encountered and never overwritten, so vertex one-ring walks are deterministic.
 
 ### 5.3 Edge flipping (`src/half_edge/flip.c3`)
 
@@ -470,9 +470,9 @@ fn bool  HalfEdgeMesh.is_flip_ok(&self, HeIndex he);
 fn void? HalfEdgeMesh.flip(&self, HeIndex he);    // FLIP_NOT_ALLOWED on bad input
 ```
 
-`flip` returns `void?` so the caller learns *why* a flip didn't happen; the Godot version logs and returns `false`. We do not rewrite an external index buffer in `flip` — the index buffer is regenerated lazily by `to_rendering_data` from the current topology, which keeps repeated flips (Delaunay refinement) cheap.
+`flip` returns `void?` so the caller learns _why_ a flip didn't happen; the Godot version logs and returns `false`. We do not rewrite an external index buffer in `flip` — the index buffer is regenerated lazily by `to_rendering_data` from the current topology, which keeps repeated flips (Delaunay refinement) cheap.
 
-`is_flip_ok` checks: not on boundary; would-be new endpoints distinct; would-be new edge does not already exist in the mesh (`vertex_has_edge_to`, ported from `_edge_exists`); the source face *and* the across-twin face are both triangles (otherwise `NON_TRIANGLE_FACE`).
+`is_flip_ok` checks: not on boundary; would-be new endpoints distinct; would-be new edge does not already exist in the mesh (`vertex_has_edge_to`, ported from `_edge_exists`); the source face _and_ the across-twin face are both triangles (otherwise `NON_TRIANGLE_FACE`).
 
 ### 5.4 Mesh walks (`src/half_edge/walks.c3`)
 
@@ -649,24 +649,24 @@ Once built, the graph is independently destroyable; the caller can `destroy()` t
 
 ## 6. Algorithm scope
 
-| Module | Algorithm | Input → Output | Notes |
-|---|---|---|---|
-| `cg::hull` | Convex hull 2D | `Vec2f[]` → `int[]` (CCW ring) | Andrew's monotone chain. |
-| `cg::hull` | Convex hull 3D | `Vec3f[]` → `HalfEdgeMesh` | Incremental hull. Used by spherical Delaunay. |
-| `cg::delaunay` | Delaunay 2D | `Vec3f[]` (z=0) → `HalfEdgeMesh` | Bowyer–Watson with super-triangle. |
-| `cg::delaunay` | Delaunay on sphere | `Vec3f[]`, radius → `HalfEdgeMesh` | = 3D convex hull, optionally re-projected. Closed mesh. |
-| `cg::voronoi` | Voronoi from Delaunay | `HalfEdgeMesh` → `VoronoiDiagram` | Via `dual`. Unbounded cells fault. |
-| `cg::voronoi` | Voronoi in polygon | `Vec3f[]` sites + polygon → `VoronoiDiagram` | Cells clipped to convex polygon. |
-| `cg::voronoi` | Voronoi in box | `Vec3f[]` sites + Aabb → `VoronoiDiagram` | Wrapper over `in_polygon`. |
-| `cg::voronoi` | Voronoi on sphere | `Vec3f[]` points, radius → `VoronoiDiagram` | Via spherical Delaunay + spherical dual. |
-| `cg::voronoi` | Voronoi → Delaunay | `VoronoiDiagram` → `HalfEdgeMesh` | Via `dual` with sites as positions. |
-| `cg::dual` | Generic dual | `HalfEdgeMesh`, `Vec3f[]` → `HalfEdgeMesh` | The bridge. |
-| `cg::graph` | Voronoi graph view | `VoronoiDiagram` → `VoronoiGraph` | Flat per-cell access (CSR ring + neighbor storage). |
-| `cg::graph` | Delaunay graph view | `HalfEdgeMesh` + circumcentres → `DelaunayGraph` | Flat per-triangle access. |
-| `cg::triangulate` | Polygon triangulation | `Vec3f[]` simple polygon → `int[]` | Ear clipping. |
-| `cg::subdivide` | Loop subdivision | `HalfEdgeMesh` (tri) → `HalfEdgeMesh` (tri) | One-step. |
-| `cg::primitives` | Icosphere | subdivisions, radius → `HalfEdgeMesh` | Loop on icosahedron. |
-| `cg::primitives` | Platonic solids | → `HalfEdgeMesh` | Tet, octa, icosa, cube (triangulated). |
+| Module            | Algorithm             | Input → Output                                   | Notes                                                   |
+| ----------------- | --------------------- | ------------------------------------------------ | ------------------------------------------------------- |
+| `cg::hull`        | Convex hull 2D        | `Vec2f[]` → `int[]` (CCW ring)                   | Andrew's monotone chain.                                |
+| `cg::hull`        | Convex hull 3D        | `Vec3f[]` → `HalfEdgeMesh`                       | Incremental hull. Used by spherical Delaunay.           |
+| `cg::delaunay`    | Delaunay 2D           | `Vec3f[]` (z=0) → `HalfEdgeMesh`                 | Bowyer–Watson with super-triangle.                      |
+| `cg::delaunay`    | Delaunay on sphere    | `Vec3f[]`, radius → `HalfEdgeMesh`               | = 3D convex hull, optionally re-projected. Closed mesh. |
+| `cg::voronoi`     | Voronoi from Delaunay | `HalfEdgeMesh` → `VoronoiDiagram`                | Via `dual`. Unbounded cells fault.                      |
+| `cg::voronoi`     | Voronoi in polygon    | `Vec3f[]` sites + polygon → `VoronoiDiagram`     | Cells clipped to convex polygon.                        |
+| `cg::voronoi`     | Voronoi in box        | `Vec3f[]` sites + Aabb → `VoronoiDiagram`        | Wrapper over `in_polygon`.                              |
+| `cg::voronoi`     | Voronoi on sphere     | `Vec3f[]` points, radius → `VoronoiDiagram`      | Via spherical Delaunay + spherical dual.                |
+| `cg::voronoi`     | Voronoi → Delaunay    | `VoronoiDiagram` → `HalfEdgeMesh`                | Via `dual` with sites as positions.                     |
+| `cg::dual`        | Generic dual          | `HalfEdgeMesh`, `Vec3f[]` → `HalfEdgeMesh`       | The bridge.                                             |
+| `cg::graph`       | Voronoi graph view    | `VoronoiDiagram` → `VoronoiGraph`                | Flat per-cell access (CSR ring + neighbor storage).     |
+| `cg::graph`       | Delaunay graph view   | `HalfEdgeMesh` + circumcentres → `DelaunayGraph` | Flat per-triangle access.                               |
+| `cg::triangulate` | Polygon triangulation | `Vec3f[]` simple polygon → `int[]`               | Ear clipping.                                           |
+| `cg::subdivide`   | Loop subdivision      | `HalfEdgeMesh` (tri) → `HalfEdgeMesh` (tri)      | One-step.                                               |
+| `cg::primitives`  | Icosphere             | subdivisions, radius → `HalfEdgeMesh`            | Loop on icosahedron.                                    |
+| `cg::primitives`  | Platonic solids       | → `HalfEdgeMesh`                                 | Tet, octa, icosa, cube (triangulated).                  |
 
 Each algorithm sits behind a free-function entry point. Output is always a fully-owned mesh / diagram that the caller `defer`s `.destroy()` on.
 
