@@ -4,6 +4,7 @@ import cg::half_edge;
 import cg::dual;
 
 const float ICO_PHI = 1.618033988749895f;
+const float SPHERE_TOLERANCE = 0.001f;
 
 const Vec3f[12] ICO_POSITIONS = {
     { -1,  ICO_PHI,  0 },
@@ -373,7 +374,7 @@ fn void test_dual_mode_spherical() @test
         float len2 = x * x + y * y + z * z;
         float diff = len2 - 1.0f;
         if (diff < 0) diff = -diff;
-        assert(diff < 0.001f);
+        assert(diff < SPHERE_TOLERANCE);
     }
 }
 
