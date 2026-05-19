@@ -2,24 +2,7 @@
   "langrev": "1",
   "warnings": ["no-unused"],
   "sources": [
-    "src/c3cg.c3i",
-    "src/types.c3i",
-    "src/faults.c3i",
-    "src/half_edge_mesh.c3i",
-    "smoke/smoke.c3",
-    "src/half_edge/builder.c3",
-    "src/half_edge/topology.c3",
-    "src/half_edge/walks.c3",
-    "src/half_edge/validate.c3",
-    "src/half_edge/flip.c3",
-    "src/geometry/predicates.c3",
-    "src/geometry/circumcenter.c3",
-    "src/geometry/centroid.c3",
-    "src/render/rendering_data.c3",
-    "src/render/geometry.c3",
-    "src/render/normals.c3",
-    "src/render/uvs.c3",
-    "src/dual/dual.c3"
+    "src/**"
   ],
   "test-sources": ["test/**"],
   "targets": {
