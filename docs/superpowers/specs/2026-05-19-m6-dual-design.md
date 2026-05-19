@@ -58,16 +58,17 @@ enum DualMode : uint
 
 ## Faults
 
-Added to `src/faults.c3i`:
+Appended to the `faultdef` block in `src/faults.c3i` (before the closing `;`):
 
 ```c3
-DUAL_REQUIRES_CLOSED_MESH,   // source mesh has ≥1 boundary half-edge
-DUAL_VERTEX_COUNT_MISMATCH,  // dual_vertex_positions.len != source.faces.len
+    DUAL_REQUIRES_CLOSED_MESH,   // source mesh has ≥1 boundary half-edge
+    DUAL_VERTEX_COUNT_MISMATCH;  // dual_vertex_positions.len != source.faces.len
 ```
 
 ### Fault propagation
 
 `dual_from_vertices` fires:
+
 - `INVALID_TOPOLOGY`, `INVALID_TWIN`, `INVALID_FACE_CYCLE`, `ATTRIBUTE_COUNT_MISMATCH` — from `source.validate()`
 - `DUAL_REQUIRES_CLOSED_MESH` — boundary scan
 - `DUAL_VERTEX_COUNT_MISMATCH` — position array length mismatch
@@ -75,6 +76,7 @@ DUAL_VERTEX_COUNT_MISMATCH,  // dual_vertex_positions.len != source.faces.len
 - `EMPTY_INPUT`, `INDEX_OUT_OF_RANGE`, `DEGENERATE_INPUT`, `DUPLICATE_HALF_EDGE` — from `from_polygons`
 
 `dual` fires all of the above plus:
+
 - `NON_TRIANGLE_FACE` — from `circumcenters_planar` / `circumcenters_on_sphere` (if mesh has non-triangle faces)
 - `INVALID_FACE_REFERENCE`, `INVALID_FACE_CYCLE` — from `face_centroids`
 - `DEGENERATE_INPUT` — from geometry helpers (near-zero cross product, radius ≤ epsilon)
@@ -104,21 +106,29 @@ if dual_vertex_positions.len != source.faces.len → DUAL_VERTEX_COUNT_MISMATCH
 
 ### Step 4 — Pass 1: collect ring sizes
 
-Allocate `face_offsets[source.vertices.len + 1]`.
-Allocate scratch buffer `FaceIndex[max_degree]` starting at capacity 3.
+```c3
+face_offsets = mem::alloc::new_array(alloc, uint, (sz) (source.vertices.len + 1));
+defer catch free(face_offsets);
+
+scratch = mem::alloc::new_array(alloc, FaceIndex, (sz) 3);  // start at capacity 3; grows if needed
+defer free(scratch);
+```
 
 ```
 face_offsets[0] = 0
 for each source vertex v:
     n = source.vertex_one_ring_faces(v, scratch)!
-    if n > scratch capacity → grow scratch, retry
+    if n > scratch capacity → realloc scratch to size n, retry the walk
     face_offsets[v + 1] = face_offsets[v] + n
 ```
 
+The re-walk after growing scratch is deterministic: `vertex_one_ring_faces` always starts from the same canonical half-edge, so it returns the same result on retry.
+
 ### Step 5 — Allocate face indices
 
-```
-face_indices = alloc::new_array(uint, face_offsets[last])
+```c3
+face_indices = mem::alloc::new_array(alloc, uint, (sz) face_offsets[last]);
+defer catch free(face_indices);
 ```
 
 ### Step 6 — Pass 2: fill face indices
@@ -140,18 +150,24 @@ result = from_polygons(alloc, dual_vertex_positions, face_offsets, face_indices)
 
 ### Step 8 — Cleanup and return
 
-Free scratch buffer. `face_offsets` and `face_indices` ownership is transferred into the returned mesh (they become part of `HalfEdgeMesh.half_edges`/`faces`/`vertices` arrays).
+```c3
+free(face_offsets);
+free(face_indices);
+return result;
+```
+
+`scratch` is freed by its `defer free()` at end of scope. The `defer catch free()` on `face_offsets` and `face_indices` cleans up if `from_polygons` fails before the explicit `free()` calls.
+
+`face_offsets` and `face_indices` are NOT part of the returned mesh — `from_polygons` reads them as CSR input and allocates its own internal arrays. They are intermediate temporaries that must be freed after construction succeeds.
 
 ### Memory ownership
 
-| Allocation | Lifecycle |
-|-----------|-----------|
-| `face_offsets` | Allocated, handed to `from_polygons`, freed by `result.destroy()` |
-| `face_indices` | Allocated, handed to `from_polygons`, freed by `result.destroy()` |
-| `scratch` | Temp, freed in `dual_from_vertices` |
-| `positions` (in `dual()`) | Temp from geometry helper, `defer free()` |
-
-`defer catch free()` guards every allocation before ownership transfer.
+| Allocation                | Lifecycle                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `face_offsets`            | Allocated for CSR construction; `defer catch free()`, explicitly `free()` after `from_polygons` returns |
+| `face_indices`            | Allocated for CSR construction; `defer catch free()`, explicitly `free()` after `from_polygons` returns |
+| `scratch`                 | Temp, `defer free()` at end of `dual_from_vertices` scope                             |
+| `positions` (in `dual()`) | Temp from geometry helper, `defer free()` after `dual_from_vertices` returns          |
 
 ## `dual()` wrapper
 
@@ -187,21 +203,21 @@ File: `test/test_dual.c3` — `module cg::test;`
 
 ### Test cases
 
-| # | Test | Fixture | Assertion |
-|---|------|---------|-----------|
-| 1 | `test_dual_tetrahedron_counts` | A | `dual(tetra).vertices.len == 4`, `faces.len == 4`, `half_edges.len == 6` |
-| 2 | `test_dual_tetrahedron_closed` | A | No boundary edges in dual output |
-| 3 | `test_dual_tetrahedron_validates` | A | `dual(tetra).validate()` succeeds |
-| 4 | `test_dual_double_dual_roundtrip` | A | `dual(dual(tetra, A), B)` has same topology counts as `tetra` |
-| 5 | `test_dual_icosahedron_to_dodecahedron` | B | 20 vertices, 12 faces, 60 half-edges; every face degree == 5 |
-| 6 | `test_dual_icosahedron_double_dual` | B | Round-trip: `dual(dual(ico, A), B)` has 12 vertices, 20 faces, 60 half-edges |
-| 7 | `test_dual_closed_mesh_required` | Single triangle | `DUAL_REQUIRES_CLOSED_MESH` |
-| 8 | `test_dual_vertex_count_mismatch` | A | Wrong-length `dual_vertex_positions` → `DUAL_VERTEX_COUNT_MISMATCH` |
-| 9 | `test_dual_mode_circumcenter` | A | `dual(tetra, CIRCUMCENTER)` valid, vertex positions ≠ centroid positions |
-| 10 | `test_dual_mode_centroid` | A | `dual(tetra, CENTROID)` valid |
-| 11 | `test_dual_mode_spherical` | B | `dual(ico, SPHERICAL_CIRCUMCENTER, 1.0)` → dodecahedron vertices on sphere within tolerance |
-| 12 | `test_dual_spherical_radius_zero_faults` | A | `dual(tetra, SPHERICAL_CIRCUMCENTER, 0.0)` → `DEGENERATE_INPUT` |
-| 13 | `test_dual_from_vertices_raw` | A | `dual_from_vertices(tetra, custom_positions)` with hand-built positions works |
+| #   | Test                                     | Fixture         | Assertion                                                                                   |
+| --- | ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------- |
+| 1   | `test_dual_tetrahedron_counts`           | A               | `dual(tetra).vertices.len == 4`, `faces.len == 4`, `half_edges.len == 6`                    |
+| 2   | `test_dual_tetrahedron_closed`           | A               | No boundary edges in dual output                                                            |
+| 3   | `test_dual_tetrahedron_validates`        | A               | `dual(tetra).validate()` succeeds                                                           |
+| 4   | `test_dual_double_dual_roundtrip`        | A               | `dual(dual(tetra, A), B)` has same topology counts as `tetra`                               |
+| 5   | `test_dual_icosahedron_to_dodecahedron`  | B               | 20 vertices, 12 faces, 60 half-edges; every face degree == 5                                |
+| 6   | `test_dual_icosahedron_double_dual`      | B               | Round-trip: `dual(dual(ico, A), B)` has 12 vertices, 20 faces, 60 half-edges                |
+| 7   | `test_dual_closed_mesh_required`         | Single triangle | `DUAL_REQUIRES_CLOSED_MESH`                                                                 |
+| 8   | `test_dual_vertex_count_mismatch`        | A               | Wrong-length `dual_vertex_positions` → `DUAL_VERTEX_COUNT_MISMATCH`                         |
+| 9   | `test_dual_mode_circumcenter`            | A               | `dual(tetra, CIRCUMCENTER)` valid, vertex positions ≠ centroid positions                    |
+| 10  | `test_dual_mode_centroid`                | A               | `dual(tetra, CENTROID)` valid                                                               |
+| 11  | `test_dual_mode_spherical`               | B               | `dual(ico, SPHERICAL_CIRCUMCENTER, 1.0)` → dodecahedron vertices on sphere within tolerance |
+| 12  | `test_dual_spherical_radius_zero_faults` | A               | `dual(tetra, SPHERICAL_CIRCUMCENTER, 0.0)` → `DEGENERATE_INPUT`                             |
+| 13  | `test_dual_from_vertices_raw`            | A               | `dual_from_vertices(tetra, custom_positions)` with hand-built positions works               |
 
 ### Dependencies for tests
 
@@ -214,6 +230,7 @@ File: `test/test_dual.c3` — `module cg::test;`
 ## Project.json changes
 
 Add to `sources`:
+
 ```json
 "src/dual/dual.c3"
 ```
