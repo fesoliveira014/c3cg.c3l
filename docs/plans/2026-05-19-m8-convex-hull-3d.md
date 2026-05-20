@@ -201,14 +201,15 @@ git commit -m "hull: add hull_3d stub with fault-path tests"
 
 ---
 
-### Task 3: Add happy-path tests (GREEN to RED within task, then stub back)
+### Task 3: Add happy-path tests AND implement hull_3d (GREEN)
 
-**Objective:** Add happy-path tests that call `hull_3d` with valid inputs. These will FAIL against the stub (returns `DEGENERATE_INPUT`), but we commit the stub state first, then add tests in a separate commit that is RED. Actually no — we must have GREEN commits. So: add tests to the file, verify they compile, see them fail at runtime. Then in the NEXT task we'll make them pass.
+**Objective:** Add happy-path tests AND the full implementation in one GREEN commit. Tests fail against the stub, implementation makes them pass. Single commit — no RED state committed.
 
 **Files:**
 - Modify: `test/test_hull_3d.c3`
+- Modify: `src/hull/hull_3d.c3`
 
-**Step 1: Add imports and append happy-path tests**
+**Step 1: Add imports and append happy-path tests to test file**
 
 Add `import cg::geometry;` and `import cg::half_edge;` to the test file imports. Then append:
 
@@ -506,10 +507,10 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
         if (visible_count == 0) continue;
 
         // Horizon edges.
-        int[] horizon_u = mem::alloc::new_array(alloc, int, (sz)(3 * visible_count));
-        defer catch free(horizon_u);
-        int[] horizon_v = mem::alloc::new_array(alloc, int, (sz)(3 * visible_count));
-        defer catch free(horizon_v);
+        int[] horizon_from = mem::alloc::new_array(alloc, int, (sz)(3 * visible_count));
+        defer catch free(horizon_from);
+        int[] horizon_to = mem::alloc::new_array(alloc, int, (sz)(3 * visible_count));
+        defer catch free(horizon_to);
         usz horizon_count = 0;
 
         for (usz fi = 0; fi < face_count; fi++) {
@@ -523,29 +524,33 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
                 int r = edges[ei][1];
                 if (try adj = edge_map[ { r, u } ]) {
                     if ((usz)adj < face_count && faces[adj].alive) {
-                        horizon_u[horizon_count] = u;
-                        horizon_v[horizon_count] = r;
+                        horizon_from[horizon_count] = u;
+                        horizon_to[horizon_count] = r;
                         horizon_count++;
                     }
                 }
             }
         }
 
-        // Stitch.
+        // Stitch new faces: for each horizon edge (u,r), add face (u,r,p).
+        // Edges: (u,r) replaces the visible face boundary; (r,p) and (p,u) complete the triangle.
         usz added = 0;
         for (usz hi = 0; hi < horizon_count; hi++) {
-            int u = horizon_u[hi];
-            int r = horizon_v[hi];
-            faces[face_count + added] = { (VertexIndex)r, (VertexIndex)u, (VertexIndex)p, true };
-            edge_map[ { r, u } ] = (int)(face_count + added);
-            edge_map[ { u, p } ] = (int)(face_count + added);
-            edge_map[ { p, r } ] = (int)(face_count + added);
+            int u = horizon_from[hi];
+            int r = horizon_to[hi];
+            faces[face_count + added] = { (VertexIndex)u, (VertexIndex)r, (VertexIndex)p, true };
+            int[<2>] e0 = { u, r };
+            int[<2>] e1 = { r, p };
+            int[<2>] e2 = { p, u };
+            edge_map[e0] = (int)(face_count + added);
+            edge_map[e1] = (int)(face_count + added);
+            edge_map[e2] = (int)(face_count + added);
             added++;
         }
         face_count += added;
 
-        free(horizon_u);
-        free(horizon_v);
+        free(horizon_from);
+        free(horizon_to);
 
         // Compact faces and rebuild edge map.
         usz write = 0;
@@ -602,6 +607,7 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
     }
 
     uint[] tri_indices = mem::alloc::new_array(alloc, uint, (sz)(3 * face_count));
+    defer catch free(tri_indices);
     for (usz fi = 0; fi < face_count; fi++) {
         tri_indices[3 * fi]     = (uint)final_remap[(int)faces[fi].v0];
         tri_indices[3 * fi + 1] = (uint)final_remap[(int)faces[fi].v1];
@@ -611,6 +617,8 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
     HalfEdgeMesh mesh = half_edge::from_triangles(alloc, final_positions, tri_indices)!;
     defer catch mesh.destroy();
 
+    mesh.validate()!;
+
     free(tri_indices);
     free(final_remap);
     free(final_positions);
@@ -619,7 +627,6 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
     free(compacted);
     free(indices);
 
-    mesh.validate()!;
     return mesh;
 }
 ```
@@ -627,12 +634,14 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
 **Implementation notes for the agent:**
 - `int[3][4] tet_faces` = C3 syntax: 4 elements of `int[3]`. Initialize with `{ ct0, ct1, ct2 }` (single braces per element).
 - `int[2][3] edges` = 3 elements of `int[2]`.
-- HashMap literals: `edge_map[ { v0, v1 } ]` and `edge_map[ { r, u } ]` — C3 0.8.0 uses `{ ... }` for `int[<2>]` keys.
+- HashMap insert: `int[<2>] key = { v0, v1 }; edge_map[key] = value;`
+- HashMap lookup: `if (try adj = edge_map[ { r, u } ]) { ... }`
 - Tetra vertex skipping: compares `p` against `tet_verts[0..3]` (the ACTUAL compacted tetra vertex indices).
 - Final mesh compaction: only vertices referenced by alive faces go into `final_positions`. `tri_indices` uses `final_remap`.
-- After all explicit `free()`s, only `mesh` remains with `defer catch mesh.destroy()`. `validate()` runs after frees — if it faults, only the mesh is cleaned up.
+- **Cleanup order**: `mesh.validate()!` runs BEFORE explicit `free()`s. If validate faults, `defer catch` handlers clean up all arrays. On success, explicit frees run and `defer catch` does not fire. No double-free possible.
+- `tri_indices` has `defer catch free(tri_indices)` for the `from_triangles!` fault path.
 - `edge_map.free(); edge_map.init(alloc)` is a valid re-init pattern.
-- Face cap of `4 * unique_count` should be sufficient (tetrahedron starts at 4 faces, each point adds at most 2n faces in practice with horizon ≈ number of visible face edges).
+- Face cap of `4 * unique_count` is sufficient (worst case: all points on hull surface generate 2 faces each; 4× gives margin).
 
 **Step 2: Build & test**
 
@@ -717,4 +726,22 @@ map.init(alloc);                       // re-init (valid after free)
 The mesh uses only vertices that appear in at least one face. Interior points, coplanar face points, and duplicates are excluded from the output mesh. A `used[]` bitmask + `final_remap[]` pass ensures this.
 
 ### Memory ownership
-All scratch arrays (`indices`, `compacted`, `remap`, `faces`, `used`, `final_positions`, `final_remap`, `tri_indices`, `horizon_*`) are explicitly freed BEFORE `mesh.validate()!`. On the success path, only `mesh` survives. On fault after `from_triangles`, `defer catch mesh.destroy()` cleans up. On earlier faults, `defer catch` on each allocation cleans up.
+
+All scratch arrays use `defer catch free(...)`. The critical invariant:
+- `mesh.validate()!` runs **before** any explicit `free()` calls.
+- If `validate()` or `from_triangles()` faults, all arrays are freed by their `defer catch` handlers.
+- On the success path, `validate()` passes, then explicit `free()`s run, `defer catch` does not fire (no fault), and `mesh` is returned to the caller.
+
+| Array | Cleanup |
+|-------|---------|
+| `indices` | Explicit `free` + `defer catch` |
+| `compacted` | Explicit `free` + `defer catch` |
+| `remap` | Explicit `free` + `defer catch` |
+| `faces` | Explicit `free` + `defer catch` |
+| `edge_map` | `edge_map.free()` per iteration + `defer catch` covers fault exit |
+| `horizon_from/to` | Explicit `free` per iteration + `defer catch` |
+| `used` | Explicit `free` + `defer catch` |
+| `final_positions` | Explicit `free` + `defer catch` |
+| `final_remap` | Explicit `free` + `defer catch` |
+| `tri_indices` | Explicit `free` + `defer catch` |
+| `HalfEdgeMesh` | Caller via `mesh.destroy()`. On fault, `defer catch mesh.destroy()` |
