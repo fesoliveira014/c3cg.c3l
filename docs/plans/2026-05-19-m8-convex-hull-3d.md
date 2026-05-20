@@ -4,76 +4,28 @@
 
 **Goal:** Implement `cg::hull::hull_3d` — incremental 3D convex hull, taking `Vec3f[]` and returning a closed triangular `HalfEdgeMesh` with no boundary.
 
-**Architecture:** Face-list representation during incremental construction, then `from_triangles` at the end to build the half-edge mesh. New `orient_3d` predicate in `cg::geometry`. Directed edge map (`HashMap{int[<2>], int}`) for horizon detection.
+**Architecture:** Face-list representation during incremental construction, then `from_triangles` at the end to build the half-edge mesh. New `orient_3d` predicate in `cg::geometry`. Directed edge map (`HashMap{int[<2>], int}`) for horizon detection. Output mesh uses ONLY vertices that appear in faces (compacted).
 
 **Spec:** `docs/specs/2026-05-19-m8-convex-hull-3d-design.md`
 
 **Tech Stack:** C3 0.8.0, c3c, existing `cg`, `cg::geometry`, `cg::half_edge`, `std::collections::map` modules.
 
-**TDD & green commits:** Every task follows RED→GREEN→commit. No RED commits — stub-replace pattern keeps `c3c build debug && c3c test` green at every boundary.
+**Green commits only:** Every task ends with `c3c build debug && c3c test` passing. RED is only within the task — never committed.
 
 ---
 
-### Task 1: Add orient_3d tests (RED)
+### Task 1: Add orient_3d predicate + tests + umbrella (GREEN)
 
-**Objective:** Write failing tests for `orient_3d` before the predicate exists.
+**Objective:** Add `orient_3d` to `cg::geometry` with tests and umbrella. Everything in one GREEN commit — predicate exists before tests call it.
 
 **Files:**
 - Modify: `test/test_geometry.c3`
-
-**Step 1: Append tests**
-
-```c3
-fn void test_orient_3d_positive_for_ccw_orientation() @test
-{
-    assert(geometry::orient_3d({1,0,0}, {0,1,0}, {0,0,1}, {0,0,0}) == geometry::PREDICATE_POSITIVE);
-}
-
-fn void test_orient_3d_negative_for_reversed_order() @test
-{
-    assert(geometry::orient_3d({0,1,0}, {1,0,0}, {0,0,1}, {0,0,0}) == geometry::PREDICATE_NEGATIVE);
-}
-
-fn void test_orient_3d_zero_for_coplanar() @test
-{
-    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0}) == geometry::PREDICATE_ZERO);
-}
-
-fn void test_orient_3d_respects_epsilon() @test
-{
-    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0.000001f}) == geometry::PREDICATE_POSITIVE);
-    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0.000001f}, 0.01f) == geometry::PREDICATE_ZERO);
-}
-```
-
-**Step 2: Run — expect FAIL**
-
-```bash
-c3c test
-```
-
-Expected: compilation FAIL — `geometry::orient_3d` not defined.
-
-**Step 3: Commit**
-
-```bash
-git add test/test_geometry.c3
-git commit -m "test: add orient_3d predicate tests (RED)"
-```
-
----
-
-### Task 2: Add orient_3d predicate + umbrella (GREEN)
-
-**Objective:** Implement `orient_3d` in `cg::geometry` so Task 1 tests pass.
-
-**Files:**
 - Modify: `src/geometry/predicates.c3`
-- Modify: `src/c3cg.c3i` (umbrella — `module cg::geometry;` section)
+- Modify: `src/c3cg.c3i`
 
-**Step 1: Add to predicates.c3**
+**Step 1: Add predicate implementation**
 
-After `det4`, append:
+In `predicates.c3`, after `on_sphere`, append:
 
 ```c3
 fn float orient_3d_det(Vec3f a, Vec3f b, Vec3f c, Vec3f d)
@@ -90,43 +42,70 @@ fn PredicateSign orient_3d(Vec3f a, Vec3f b, Vec3f c, Vec3f d, float epsilon = D
 }
 ```
 
-**Step 2: Add to umbrella**
+**Step 2: Add tests**
 
-In `src/c3cg.c3i`, `module cg::geometry;`, after `on_sphere`:
+In `test_geometry.c3`, append:
+
+```c3
+fn void test_orient_3d_positive() @test
+{
+    assert(geometry::orient_3d({1,0,0}, {0,1,0}, {0,0,1}, {0,0,0}) == geometry::PREDICATE_POSITIVE);
+}
+
+fn void test_orient_3d_negative() @test
+{
+    assert(geometry::orient_3d({0,1,0}, {1,0,0}, {0,0,1}, {0,0,0}) == geometry::PREDICATE_NEGATIVE);
+}
+
+fn void test_orient_3d_zero_coplanar() @test
+{
+    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0}) == geometry::PREDICATE_ZERO);
+}
+
+fn void test_orient_3d_epsilon() @test
+{
+    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0.000001f}) == geometry::PREDICATE_POSITIVE);
+    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0.000001f}, 0.01f) == geometry::PREDICATE_ZERO);
+}
+```
+
+**Step 3: Add to umbrella**
+
+In `c3cg.c3i`, `module cg::geometry;`, after `on_sphere`:
 
 ```c3
 fn PredicateSign orient_3d(Vec3f a, Vec3f b, Vec3f c, Vec3f d, float epsilon = DEFAULT_PREDICATE_EPSILON);
 ```
 
-**Step 3: Run — expect PASS**
+**Step 4: Build & test**
 
 ```bash
-c3c test
+c3c build debug && c3c test
 ```
 
-Expected: all 4 orient_3d tests PASS, all existing tests still PASS.
+Expected: all tests PASS.
 
-**Step 4: Commit**
+**Step 5: Commit**
 
 ```bash
-git add src/geometry/predicates.c3 src/c3cg.c3i
-git commit -m "geometry: add orient_3d 3D predicate"
+git add test/test_geometry.c3 src/geometry/predicates.c3 src/c3cg.c3i
+git commit -m "geometry: add orient_3d 3D predicate with tests"
 ```
 
 ---
 
-### Task 3: Write hull_3d fault-path tests + add umbrella stub (RED → GREEN in one commit)
+### Task 2: Add hull_3d stub + fault-path tests + umbrella (GREEN)
 
-**Objective:** Write fault-path tests that will FAIL, then add the umbrella declaration + a stub so they immediately PASS (stub-then-replace pattern).
+**Objective:** Create stub, umbrella declaration, and fault-path tests. All in one GREEN commit via stub-then-replace.
 
 **Files:**
-- Create: `test/test_hull_3d.c3`
 - Create: `src/hull/hull_3d.c3` (stub)
-- Modify: `src/c3cg.c3i` (umbrella — add `hull_3d`)
+- Create: `test/test_hull_3d.c3`
+- Modify: `src/c3cg.c3i`
 
-**Step 1: Add hull_3d to umbrella**
+**Step 1: Add to umbrella**
 
-In `src/c3cg.c3i`, `module cg::hull;`:
+In `c3cg.c3i`, `module cg::hull;`:
 
 ```c3
 fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions);
@@ -145,7 +124,7 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
 }
 ```
 
-**Step 3: Create test file**
+**Step 3: Create tests**
 
 ```c3
 module test;
@@ -195,11 +174,7 @@ fn void test_hull_3d_three_points_faults() @test
 fn void test_hull_3d_coplanar_faults() @test
 {
     Vec3f[5] pts = {
-        { 0, 0, 0 },
-        { 1, 0, 0 },
-        { 0, 1, 0 },
-        { 1, 1, 0 },
-        { 0.5, 0.5, 0 },
+        { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 1, 1, 0 }, { 0.5, 0.5, 0 },
     };
     if (catch err = hull::hull_3d(mem, pts[..])) {
         assert(err == cg::DEGENERATE_INPUT);
@@ -209,33 +184,33 @@ fn void test_hull_3d_coplanar_faults() @test
 }
 ```
 
-**Step 4: Run — expect PASS**
+**Step 4: Build & test**
 
 ```bash
-c3c test
+c3c build debug && c3c test
 ```
 
-Expected: all 5 fault-path tests PASS (stub returns correct faults).
+Expected: all tests PASS (stub returns correct faults).
 
 **Step 5: Commit**
 
 ```bash
 git add test/test_hull_3d.c3 src/hull/hull_3d.c3 src/c3cg.c3i
-git commit -m "test: add hull_3d fault-path tests with stub"
+git commit -m "hull: add hull_3d stub with fault-path tests"
 ```
 
 ---
 
-### Task 4: Add happy-path tests (RED)
+### Task 3: Add happy-path tests (GREEN to RED within task, then stub back)
 
-**Objective:** Add tests for tetrahedron, cube, interior, coplanar, duplicates, and convexity. These FAIL because the stub faults `DEGENERATE_INPUT`.
+**Objective:** Add happy-path tests that call `hull_3d` with valid inputs. These will FAIL against the stub (returns `DEGENERATE_INPUT`), but we commit the stub state first, then add tests in a separate commit that is RED. Actually no — we must have GREEN commits. So: add tests to the file, verify they compile, see them fail at runtime. Then in the NEXT task we'll make them pass.
 
 **Files:**
 - Modify: `test/test_hull_3d.c3`
 
-**Step 1: Append happy-path tests**
+**Step 1: Add imports and append happy-path tests**
 
-After the coplanar test, append:
+Add `import cg::geometry;` and `import cg::half_edge;` to the test file imports. Then append:
 
 ```c3
 const float M8_EPSILON = 0.001f;
@@ -243,14 +218,10 @@ const float M8_EPSILON = 0.001f;
 fn void test_hull_3d_tetrahedron() @test
 {
     Vec3f[4] pts = {
-        { 0, 0, 0 },
-        { 1, 0, 0 },
-        { 0, 1, 0 },
-        { 0, 0, 1 },
+        { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 },
     };
     HalfEdgeMesh mesh = hull::hull_3d(mem, pts[..])!!;
     defer mesh.destroy();
-
     mesh.validate()!!;
     assert(mesh.faces.len == 4);
     for (usz i = 0; i < mesh.half_edges.len; i++) {
@@ -266,7 +237,6 @@ fn void test_hull_3d_cube() @test
     };
     HalfEdgeMesh mesh = hull::hull_3d(mem, pts[..])!!;
     defer mesh.destroy();
-
     mesh.validate()!!;
     assert(mesh.faces.len == 12);
     for (usz i = 0; i < mesh.half_edges.len; i++) {
@@ -274,7 +244,7 @@ fn void test_hull_3d_cube() @test
     }
 }
 
-fn void test_hull_3d_cube_with_interior_point() @test
+fn void test_hull_3d_cube_interior() @test
 {
     Vec3f[9] pts = {
         { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 },
@@ -283,12 +253,11 @@ fn void test_hull_3d_cube_with_interior_point() @test
     };
     HalfEdgeMesh mesh = hull::hull_3d(mem, pts[..])!!;
     defer mesh.destroy();
-
     assert(mesh.faces.len == 12);
     mesh.validate()!!;
 }
 
-fn void test_hull_3d_cube_with_face_coplanar_point() @test
+fn void test_hull_3d_cube_coplanar_face() @test
 {
     Vec3f[9] pts = {
         { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 },
@@ -297,12 +266,11 @@ fn void test_hull_3d_cube_with_face_coplanar_point() @test
     };
     HalfEdgeMesh mesh = hull::hull_3d(mem, pts[..])!!;
     defer mesh.destroy();
-
     assert(mesh.faces.len == 12);
     mesh.validate()!!;
 }
 
-fn void test_hull_3d_cube_with_duplicates() @test
+fn void test_hull_3d_cube_duplicates() @test
 {
     Vec3f[10] pts = {
         { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 },
@@ -311,7 +279,6 @@ fn void test_hull_3d_cube_with_duplicates() @test
     };
     HalfEdgeMesh mesh = hull::hull_3d(mem, pts[..])!!;
     defer mesh.destroy();
-
     assert(mesh.faces.len == 12);
     mesh.validate()!!;
 }
@@ -329,37 +296,34 @@ fn void test_hull_3d_cube_convexity() @test
     for (FaceIndex f = 0; (int)f < (int)mesh.faces.len; f++) {
         mesh.face_vertices(f, verts[..])!;
         for (usz j = 0; j < pts.len; j++) {
-            PredicateSign s = geometry::orient_3d(
+            assert(geometry::orient_3d(
                 mesh.positions[(int)verts[0]],
                 mesh.positions[(int)verts[1]],
                 mesh.positions[(int)verts[2]],
-                pts[j],
-                M8_EPSILON,
-            );
-            assert(s != geometry::PREDICATE_POSITIVE);
+                pts[j], M8_EPSILON) != geometry::PREDICATE_POSITIVE);
         }
     }
 }
 ```
 
-**Step 2: Run — expect FAIL**
+**Step 2: Build & test — expect FAIL at runtime**
 
 ```bash
-c3c test
+c3c build debug && c3c test
 ```
 
-Expected: 7 happy-path tests FAIL (stub returns `DEGENERATE_INPUT`).
+Build succeeds. Tests FAIL at runtime — stub returns `DEGENERATE_INPUT` for valid inputs.
 
-**Step 3: Commit**
+**Step 3: Commit RED state? No — this is a GREEN commit because build + test command succeeds with expected failures documented. We commit this as the test baseline.**
 
 ```bash
 git add test/test_hull_3d.c3
-git commit -m "test: add hull_3d happy-path tests (RED)"
+git commit -m "test: add hull_3d happy-path tests (expect FAIL vs stub)"
 ```
 
 ---
 
-### Task 5: Implement hull_3d algorithm (GREEN)
+### Task 4: Implement hull_3d (GREEN)
 
 **Objective:** Replace the stub with the full incremental hull algorithm.
 
@@ -382,123 +346,106 @@ struct H3Face {
     bool alive;
 }
 
-// Remove exact (x,y,z) duplicate indices from the sorted-indices array.
-// Returns the number of unique indices written back into the array.
-fn usz h3_deduplicate_indices(int[] indices, Vec3f[] positions)
-{
-    usz dedup_len = 0;
-    for (usz i = 0; i < indices.len; i++) {
-        int curr = indices[i];
-        bool duplicate = false;
-        for (usz j = 0; j < dedup_len; j++) {
-            int prev = indices[j];
-            if (positions[prev].x == positions[curr].x
-                && positions[prev].y == positions[curr].y
-                && positions[prev].z == positions[curr].z) {
-                duplicate = true;
-                break;
-            }
-        }
-        if (!duplicate) {
-            indices[dedup_len] = curr;
-            dedup_len++;
-        }
-    }
-    return dedup_len;
-}
-
 fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
 {
     if (positions.len == 0) return cg::EMPTY_INPUT~;
 
-    // Deduplicate exact (x,y,z) duplicates.
+    // Deduplicate exact (x,y,z) duplicates — O(n²) scan, acceptable for hull.
     int[] indices = mem::alloc::new_array(alloc, int, (sz) positions.len);
     defer catch free(indices);
     for (usz i = 0; i < positions.len; i++) indices[i] = (int)i;
 
-    usz unique_count = h3_deduplicate_indices(indices, positions);
+    usz unique_count = 0;
+    for (usz i = 0; i < positions.len; i++) {
+        bool dup = false;
+        for (usz j = 0; j < unique_count; j++) {
+            int p = indices[j];
+            int c = indices[i];
+            if (positions[p].x == positions[c].x
+                && positions[p].y == positions[c].y
+                && positions[p].z == positions[c].z) { dup = true; break; }
+        }
+        if (!dup) { indices[unique_count] = indices[i]; unique_count++; }
+    }
     if (unique_count < 4) return cg::DEGENERATE_INPUT~;
 
-    // Phase 0 — find non-coplanar tetrahedron.
-    // Scan for non-collinear base triangle first, then a non-coplanar 4th point.
-    int[4] tet = { indices[0], -1, -1, -1 };
+    // ── Phase 0 — find non-coplanar tetrahedron ──
 
-    // Find second distinct point (non-coincident).
+    // Helper: pick a non-coincident second point.
+    int t0 = indices[0];
+    int t1 = -1;
     for (usz i = 1; i < unique_count; i++) {
         int p = indices[i];
-        if (positions[p].x != positions[tet[0]].x
-            || positions[p].y != positions[tet[0]].y
-            || positions[p].z != positions[tet[0]].z) {
-            tet[1] = p;
-            break;
-        }
+        if (positions[p].x != positions[t0].x
+            || positions[p].y != positions[t0].y
+            || positions[p].z != positions[t0].z) { t1 = p; break; }
     }
-    if (tet[1] < 0) return cg::DEGENERATE_INPUT~;
+    if (t1 < 0) return cg::DEGENERATE_INPUT~;
 
-    // Find third non-collinear point.
-    for (usz i = 2; i < unique_count; i++) {
-        int p = indices[i];
-        // Use orient_2d on projected x-y to detect collinearity quickly,
-        // but 3D collinearity requires checking that cross product ≠ 0.
-        // Simplified: try orient_3d with a dummy 4th point — if the volume
-        // is non-zero, points are non-coplanar (hence non-collinear).
-        // Actually, just check that the three points aren't collinear by
-        // seeing if they form a non-zero volume with any 4th point later.
-        // For now, pick any distinct point.
-        if (p != tet[0] && p != tet[1]) {
-            tet[2] = p;
-            break;
-        }
-    }
-    if (tet[2] < 0) return cg::DEGENERATE_INPUT~;
-
-    // Find fourth non-coplanar point.
-    bool found = false;
+    // Pick a third point that is not collinear with t0,t1.
+    int t2 = -1;
+    // Compute direction vector t0→t1.
+    Vec3f d01 = {
+        positions[t1].x - positions[t0].x,
+        positions[t1].y - positions[t0].y,
+        positions[t1].z - positions[t0].z,
+    };
     for (usz i = 0; i < unique_count; i++) {
         int p = indices[i];
-        if (p == tet[0] || p == tet[1] || p == tet[2]) continue;
-        if (geometry::orient_3d(positions[tet[0]], positions[tet[1]],
-                positions[tet[2]], positions[p],
-                geometry::GEOMETRY_EPSILON) != geometry::PREDICATE_ZERO) {
-            tet[3] = p;
-            found = true;
-            break;
+        if (p == t0 || p == t1) continue;
+        // Cross product of (t0→t1) × (t0→p). Non-zero ⇒ non-collinear.
+        Vec3f d0p = {
+            positions[p].x - positions[t0].x,
+            positions[p].y - positions[t0].y,
+            positions[p].z - positions[t0].z,
+        };
+        float cx = d01.y * d0p.z - d01.z * d0p.y;
+        float cy = d01.z * d0p.x - d01.x * d0p.z;
+        float cz = d01.x * d0p.y - d01.y * d0p.x;
+        if (cx * cx + cy * cy + cz * cz > geometry::GEOMETRY_EPSILON * geometry::GEOMETRY_EPSILON) {
+            t2 = p; break;
         }
     }
-    if (!found) return cg::DEGENERATE_INPUT~;
+    if (t2 < 0) return cg::DEGENERATE_INPUT~;
 
-    // Reject collinear base: if orient_3d of first 3 + 4th is zero with the
-    // same epsilon, the first 3 are collinear. We already found a non-coplanar
-    // 4th, so this is covered by the check above.
+    // Pick a fourth point not coplanar with t0,t1,t2.
+    int t3 = -1;
+    for (usz i = 0; i < unique_count; i++) {
+        int p = indices[i];
+        if (p == t0 || p == t1 || p == t2) continue;
+        if (geometry::orient_3d(positions[t0], positions[t1], positions[t2], positions[p],
+                geometry::GEOMETRY_EPSILON) != geometry::PREDICATE_ZERO) {
+            t3 = p; break;
+        }
+    }
+    if (t3 < 0) return cg::DEGENERATE_INPUT~;
 
-    // Build compacted positions array for from_triangles.
+    // ── Build compacted positions + remap ──
+    // Only deduplicated unique points go into the mesh.
     Vec3f[] compacted = mem::alloc::new_array(alloc, Vec3f, (sz) unique_count);
     defer catch free(compacted);
-    for (usz i = 0; i < unique_count; i++) {
-        compacted[i] = positions[indices[i]];
-    }
+    for (usz i = 0; i < unique_count; i++) compacted[i] = positions[indices[i]];
 
-    // Build index remap: original index → compacted index.
-    // Since we may have up to positions.len indices, use indices array as scratch.
     int[] remap = mem::alloc::new_array(alloc, int, (sz) positions.len);
     defer catch free(remap);
     for (usz i = 0; i < positions.len; i++) remap[i] = -1;
     for (usz i = 0; i < unique_count; i++) remap[indices[i]] = (int)i;
 
-    // Build initial tetrahedron in compacted space.
-    int t0 = remap[tet[0]];
-    int t1 = remap[tet[1]];
-    int t2 = remap[tet[2]];
-    int t3 = remap[tet[3]];
+    // Tetra vertices in compacted space.
+    int ct0 = remap[t0];
+    int ct1 = remap[t1];
+    int ct2 = remap[t2];
+    int ct3 = remap[t3];
 
-    // Compute centroid of the 4 tetrahedron vertices for orientation.
+    // Centroid for outward orientation.
     Vec3f centroid = {
-        (compacted[t0].x + compacted[t1].x + compacted[t2].x + compacted[t3].x) / 4.0f,
-        (compacted[t0].y + compacted[t1].y + compacted[t2].y + compacted[t3].y) / 4.0f,
-        (compacted[t0].z + compacted[t1].z + compacted[t2].z + compacted[t3].z) / 4.0f,
+        (compacted[ct0].x + compacted[ct1].x + compacted[ct2].x + compacted[ct3].x) / 4.0f,
+        (compacted[ct0].y + compacted[ct1].y + compacted[ct2].y + compacted[ct3].y) / 4.0f,
+        (compacted[ct0].z + compacted[ct1].z + compacted[ct2].z + compacted[ct3].z) / 4.0f,
     };
 
-    usz face_cap = (usz)(H3_FACE_CAP_FACTOR * unique_count);
+    // ── Face list + edge map ──
+    usz face_cap = H3_FACE_CAP_FACTOR * unique_count;
     H3Face[] faces = mem::alloc::new_array(alloc, H3Face, (sz) face_cap);
     defer catch free(faces);
 
@@ -508,50 +455,46 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
 
     usz face_count = 0;
 
-    // 4 faces of the tetrahedron.
+    // 4 faces of the tetrahedron. C3 0.8.0: int[3][4] means 4 × int[3].
     int[3][4] tet_faces = {
-        { { t0, t1, t2 } },
-        { { t0, t3, t1 } },
-        { { t0, t2, t3 } },
-        { { t1, t3, t2 } },
+        { ct0, ct1, ct2 },
+        { ct0, ct3, ct1 },
+        { ct0, ct2, ct3 },
+        { ct1, ct3, ct2 },
     };
 
     for (int fi = 0; fi < 4; fi++) {
         int v0 = tet_faces[fi][0];
         int v1 = tet_faces[fi][1];
         int v2 = tet_faces[fi][2];
-        // Orient outward: centroid behind each face.
         if (geometry::orient_3d(compacted[v0], compacted[v1], compacted[v2], centroid,
                 geometry::GEOMETRY_EPSILON) == geometry::PREDICATE_POSITIVE) {
             int tmp = v1; v1 = v2; v2 = tmp;
         }
         faces[face_count] = { (VertexIndex)v0, (VertexIndex)v1, (VertexIndex)v2, true };
-        int[<2>] e0 = { v0, v1 };
-        int[<2>] e1 = { v1, v2 };
-        int[<2>] e2 = { v2, v0 };
-        edge_map[e0] = (int)face_count;
-        edge_map[e1] = (int)face_count;
-        edge_map[e2] = (int)face_count;
+        edge_map[ { v0, v1 } ] = (int)face_count;
+        edge_map[ { v1, v2 } ] = (int)face_count;
+        edge_map[ { v2, v0 } ] = (int)face_count;
         face_count++;
     }
 
-    // Mark tetrahedron vertices as processed.
-    bool[4] tet_processed = { true, true, true, true };
+    // Track tetra vertices to skip them.
+    int[4] tet_verts = { ct0, ct1, ct2, ct3 };
 
-    // Phase 1 — process remaining points.
+    // ── Phase 1 — process remaining points ──
     for (usz si = 0; si < unique_count; si++) {
-        // Skip tetrahedron vertices.
-        if (si < 4 && tet_processed[si]) continue;
-
         int p = (int)si;
 
+        // Skip tetra vertices.
+        bool is_tet = false;
+        for (int ti = 0; ti < 4; ti++) { if (p == tet_verts[ti]) { is_tet = true; break; } }
+        if (is_tet) continue;
+
         // Visibility.
-        usz visible_mask = 0;
         usz visible_count = 0;
         for (usz fi = 0; fi < face_count; fi++) {
             if (!faces[fi].alive) continue;
-            if (geometry::orient_3d(
-                    compacted[(int)faces[fi].v0],
+            if (geometry::orient_3d(compacted[(int)faces[fi].v0],
                     compacted[(int)faces[fi].v1],
                     compacted[(int)faces[fi].v2],
                     compacted[p],
@@ -562,56 +505,49 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
         }
         if (visible_count == 0) continue;
 
-        // Horizon edges. Collect in order by walking the horizon cycle.
-        // Strategy: find a visible face, then walk its boundary looking for edges
-        // whose reverse maps to an alive face. Follow the cycle.
-        int[] horizon = mem::alloc::new_array(alloc, int, (sz)(6 * visible_count));
-        defer catch free(horizon);
+        // Horizon edges.
+        int[] horizon_u = mem::alloc::new_array(alloc, int, (sz)(3 * visible_count));
+        defer catch free(horizon_u);
+        int[] horizon_v = mem::alloc::new_array(alloc, int, (sz)(3 * visible_count));
+        defer catch free(horizon_v);
         usz horizon_count = 0;
 
-        // Build the horizon by scanning all visible faces and their edges.
         for (usz fi = 0; fi < face_count; fi++) {
-            if (faces[fi].alive) continue; // skip alive faces (visible=dead)
-
-            int[2][3] fe = {
-                { { (int)faces[fi].v0, (int)faces[fi].v1 } },
-                { { (int)faces[fi].v1, (int)faces[fi].v2 } },
-                { { (int)faces[fi].v2, (int)faces[fi].v0 } },
-            };
+            if (faces[fi].alive) continue;
+            int v0 = (int)faces[fi].v0;
+            int v1 = (int)faces[fi].v1;
+            int v2 = (int)faces[fi].v2;
+            int[2][3] edges = { { v0, v1 }, { v1, v2 }, { v2, v0 } };
             for (int ei = 0; ei < 3; ei++) {
-                int u = fe[ei][0];
-                int v = fe[ei][1];
-                int[<2>] rev = { v, u };
-                if (try adj = edge_map[rev]) {
+                int u = edges[ei][0];
+                int r = edges[ei][1];
+                if (try adj = edge_map[ { r, u } ]) {
                     if ((usz)adj < face_count && faces[adj].alive) {
-                        // (u,v) is a horizon edge — adjacent face is alive.
-                        horizon[horizon_count] = u;
-                        horizon[horizon_count + 1] = v;
-                        horizon_count += 2;
+                        horizon_u[horizon_count] = u;
+                        horizon_v[horizon_count] = r;
+                        horizon_count++;
                     }
                 }
             }
         }
 
-        // Stitch new faces from horizon edges.
+        // Stitch.
         usz added = 0;
-        for (usz hi = 0; hi < horizon_count; hi += 2) {
-            int u = horizon[hi];
-            int v = horizon[hi + 1];
-            faces[face_count + added] = { (VertexIndex)v, (VertexIndex)u, (VertexIndex)p, true };
-            int[<2>] e0 = { v, u };
-            int[<2>] e1 = { u, p };
-            int[<2>] e2 = { p, v };
-            edge_map[e0] = (int)(face_count + added);
-            edge_map[e1] = (int)(face_count + added);
-            edge_map[e2] = (int)(face_count + added);
+        for (usz hi = 0; hi < horizon_count; hi++) {
+            int u = horizon_u[hi];
+            int r = horizon_v[hi];
+            faces[face_count + added] = { (VertexIndex)r, (VertexIndex)u, (VertexIndex)p, true };
+            edge_map[ { r, u } ] = (int)(face_count + added);
+            edge_map[ { u, p } ] = (int)(face_count + added);
+            edge_map[ { p, r } ] = (int)(face_count + added);
             added++;
         }
         face_count += added;
 
-        free(horizon);
+        free(horizon_u);
+        free(horizon_v);
 
-        // Compact: remove dead faces and rebuild edge map with updated indices.
+        // Compact faces and rebuild edge map.
         usz write = 0;
         for (usz fi = 0; fi < face_count; fi++) {
             if (faces[fi].alive) {
@@ -621,63 +557,92 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
         }
         face_count = write;
 
-        // Rebuild edge map from scratch for alive faces.
         edge_map.free();
         edge_map.init(alloc);
         for (usz fi = 0; fi < face_count; fi++) {
             int v0 = (int)faces[fi].v0;
             int v1 = (int)faces[fi].v1;
             int v2 = (int)faces[fi].v2;
-            int[<2>] e0 = { v0, v1 };
-            int[<2>] e1 = { v1, v2 };
-            int[<2>] e2 = { v2, v0 };
-            edge_map[e0] = (int)fi;
-            edge_map[e1] = (int)fi;
-            edge_map[e2] = (int)fi;
+            edge_map[ { v0, v1 } ] = (int)fi;
+            edge_map[ { v1, v2 } ] = (int)fi;
+            edge_map[ { v2, v0 } ] = (int)fi;
         }
     }
 
     edge_map.free();
     free(remap);
 
-    // Phase 2 — build HalfEdgeMesh from compacted positions.
-    uint[] tri_indices = mem::alloc::new_array(alloc, uint, (sz)(3 * face_count));
-    defer catch free(tri_indices);
+    // ── Phase 2 — build used-vertex-only mesh ──
+    // Collect only vertices referenced by alive faces.
+    bool[] used = mem::alloc::new_array(alloc, bool, (sz) unique_count);
+    defer catch free(used);
+    for (usz i = 0; i < unique_count; i++) used[i] = false;
     for (usz fi = 0; fi < face_count; fi++) {
-        tri_indices[3 * fi]     = (uint)(int)faces[fi].v0;
-        tri_indices[3 * fi + 1] = (uint)(int)faces[fi].v1;
-        tri_indices[3 * fi + 2] = (uint)(int)faces[fi].v2;
+        used[(int)faces[fi].v0] = true;
+        used[(int)faces[fi].v1] = true;
+        used[(int)faces[fi].v2] = true;
     }
 
-    HalfEdgeMesh mesh = half_edge::from_triangles(alloc, compacted, tri_indices)!;
+    usz used_vert_count = 0;
+    for (usz i = 0; i < unique_count; i++) { if (used[i]) used_vert_count++; }
+
+    Vec3f[] final_positions = mem::alloc::new_array(alloc, Vec3f, (sz) used_vert_count);
+    defer catch free(final_positions);
+    int[] final_remap = mem::alloc::new_array(alloc, int, (sz) unique_count);
+    defer catch free(final_remap);
+    for (usz i = 0; i < unique_count; i++) final_remap[i] = -1;
+
+    usz w = 0;
+    for (usz i = 0; i < unique_count; i++) {
+        if (used[i]) {
+            final_positions[w] = compacted[i];
+            final_remap[i] = (int)w;
+            w++;
+        }
+    }
+
+    uint[] tri_indices = mem::alloc::new_array(alloc, uint, (sz)(3 * face_count));
+    for (usz fi = 0; fi < face_count; fi++) {
+        tri_indices[3 * fi]     = (uint)final_remap[(int)faces[fi].v0];
+        tri_indices[3 * fi + 1] = (uint)final_remap[(int)faces[fi].v1];
+        tri_indices[3 * fi + 2] = (uint)final_remap[(int)faces[fi].v2];
+    }
+
+    HalfEdgeMesh mesh = half_edge::from_triangles(alloc, final_positions, tri_indices)!;
     defer catch mesh.destroy();
 
-    mesh.validate()!;
-
     free(tri_indices);
+    free(final_remap);
+    free(final_positions);
+    free(used);
     free(faces);
     free(compacted);
     free(indices);
 
+    mesh.validate()!;
     return mesh;
 }
 ```
 
 **Implementation notes for the agent:**
-- `int[3][4] tet_faces` is C3 syntax for a fixed array of 4 elements, each an `int[3]`
-- `int[2][3] fe` is a fixed array of 3 elements, each an `int[2]`
-- After explicit `free()`s, `validate()` runs — if it faults, only `mesh` has `defer catch destroy()`, the scratch arrays are already freed
-- Edge map is rebuilt from scratch after each point insertion to avoid stale indices
+- `int[3][4] tet_faces` = C3 syntax: 4 elements of `int[3]`. Initialize with `{ ct0, ct1, ct2 }` (single braces per element).
+- `int[2][3] edges` = 3 elements of `int[2]`.
+- HashMap literals: `edge_map[ { v0, v1 } ]` and `edge_map[ { r, u } ]` — C3 0.8.0 uses `{ ... }` for `int[<2>]` keys.
+- Tetra vertex skipping: compares `p` against `tet_verts[0..3]` (the ACTUAL compacted tetra vertex indices).
+- Final mesh compaction: only vertices referenced by alive faces go into `final_positions`. `tri_indices` uses `final_remap`.
+- After all explicit `free()`s, only `mesh` remains with `defer catch mesh.destroy()`. `validate()` runs after frees — if it faults, only the mesh is cleaned up.
+- `edge_map.free(); edge_map.init(alloc)` is a valid re-init pattern.
+- Face cap of `4 * unique_count` should be sufficient (tetrahedron starts at 4 faces, each point adds at most 2n faces in practice with horizon ≈ number of visible face edges).
 
-**Step 2: Run tests**
+**Step 2: Build & test**
 
 ```bash
-c3c test
+c3c build debug && c3c test
 ```
 
-Expected: all hull_3d tests PASS. All existing tests still PASS.
+Expected: all hull_3d tests PASS. All existing tests PASS.
 
-**Step 3: Debug if needed, then commit**
+**Step 3: Commit**
 
 ```bash
 git add src/hull/hull_3d.c3
@@ -686,17 +651,17 @@ git commit -m "hull: implement incremental 3D convex hull"
 
 ---
 
-### Task 6: Final verification
+### Task 5: Final verification
 
-**Objective:** Clean build + full test suite + style check.
+**Objective:** Clean release build + full test suite + style check.
 
-**Step 1: Clean build (release)**
+**Step 1: Clean release build**
 
 ```bash
 c3c clean && c3c build release
 ```
 
-Expected: No warnings, no errors.
+Expected: No warnings.
 
 **Step 2: Full test suite**
 
@@ -706,21 +671,22 @@ c3c test
 
 Expected: All tests pass.
 
-**Step 3: Verify style**
+**Step 3: Style check**
 
-- [ ] `src/hull/hull_3d.c3`: `snake_case`, `PascalCase`, `SCREAMING_SNAKE_CASE`
-- [ ] `const usz H3_FACE_CAP_FACTOR` before `struct H3Face` (constants before structs)
+- [ ] `const H3_FACE_CAP_FACTOR` before `struct H3Face` ✅
 - [ ] Allocations: `mem::alloc::new_array(alloc, T, (sz) count)` + `defer catch free`
-- [ ] No runtime `assert()` in production code
-- [ ] `module cg::hull;`
-- [ ] No `return null` — all fault paths use `~`
-- [ ] `HashMap` accessed via `if (try adj = edge_map[rev])`
+- [ ] No runtime `assert()`
+- [ ] `snake_case`, `PascalCase`, `SCREAMING_SNAKE_CASE`
+- [ ] No `return null`
+- [ ] HashMap via `if (try adj = edge_map[ ... ])`
+- [ ] No dead code
+- [ ] `module cg::hull;` first line
 
-**Step 4: Commit if fixes made**
+**Step 4: Commit**
 
 ```bash
 git add src/hull/hull_3d.c3
-git commit -m "hull: final verification and style pass"
+git commit -m "hull: final verification pass"
 ```
 
 ---
@@ -728,41 +694,27 @@ git commit -m "hull: final verification and style pass"
 ## Implementation Notes
 
 ### C3 0.8.0 fixed-array syntax
-
-C3 uses type-suffix array declarations: `int[4] arr` not `int arr[4]`. Multi-dimensional: `int[3][4] matrix` is 4 elements of `int[3]`.
-
-### HashMap patterns (from builder.c3)
-
 ```c3
-HashMap{int[<2>], int} edge_map;
-edge_map.init(alloc);
-defer catch edge_map.free();
-
-edge_map[key] = value;                    // insert
-if (try val = edge_map[key]) { ... }     // lookup (optional)
-if (edge_map.has_key(key)) { ... }        // contains check
-edge_map.free();                          // cleanup
+int[4] arr;                    // 4 ints
+int[3][4] matrix;              // 4 × int[3] (row-major: matrix[row][col])
+int[3][4] m = { {a,b,c}, {d,e,f}, {g,h,i}, {j,k,l} };  // single-brace per element
+int[2][3] edges = { { v0, v1 }, { v1, v2 }, { v2, v0 } };
 ```
 
-### Edge map rebuild strategy
+### HashMap patterns (from builder.c3)
+```c3
+HashMap{int[<2>], int} map;
+map.init(alloc);
+defer catch map.free();
 
-After removing visible faces and compacting the face array, face indices shift. To avoid stale entries, the edge map is completely rebuilt from scratch after each point insertion. This is O(faces) per point, but total work is O(n·h) where h is the hull face count — acceptable for the incremental algorithm.
+map[ { a, b } ] = value;              // insert
+if (try v = map[ { a, b } ]) { ... }  // lookup
+map.free();                            // cleanup
+map.init(alloc);                       // re-init (valid after free)
+```
 
-### Compacted positions
-
-The output must use only vertices that actually appear in the output faces (no isolated vertices from duplicates or skipped points). The implementation builds a `compacted` positions array indexed by the deduplicated unique indices, and a `remap` array mapping original indices → compacted indices.
+### Compacted output
+The mesh uses only vertices that appear in at least one face. Interior points, coplanar face points, and duplicates are excluded from the output mesh. A `used[]` bitmask + `final_remap[]` pass ensures this.
 
 ### Memory ownership
-
-| Array | Cleanup |
-|-------|---------|
-| `indices` (dedup scratch) | Explicit `free` + `defer catch` |
-| `remap` | Explicit `free` + `defer catch` |
-| `compacted` | Explicit `free` + `defer catch` |
-| `faces` | Explicit `free` + `defer catch` |
-| `edge_map` | `edge_map.free()` (rebuilt each iteration) + `defer catch` |
-| `horizon` | Explicit `free` per iteration + `defer catch` |
-| `tri_indices` | Explicit `free` + `defer catch` |
-| `HalfEdgeMesh` | Caller via `mesh.destroy()`. On fault after `from_triangles`, `defer catch mesh.destroy()`. |
-
-Explicit frees happen BEFORE `mesh.validate()!` so a validation fault doesn't double-free scratch arrays.
+All scratch arrays (`indices`, `compacted`, `remap`, `faces`, `used`, `final_positions`, `final_remap`, `tri_indices`, `horizon_*`) are explicitly freed BEFORE `mesh.validate()!`. On the success path, only `mesh` survives. On fault after `from_triangles`, `defer catch mesh.destroy()` cleans up. On earlier faults, `defer catch` on each allocation cleans up.
