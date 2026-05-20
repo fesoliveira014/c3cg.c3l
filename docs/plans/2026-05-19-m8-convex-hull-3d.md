@@ -19,6 +19,7 @@
 **Objective:** Add `orient_3d` to `cg::geometry` with tests and umbrella. Everything in one GREEN commit — predicate exists before tests call it.
 
 **Files:**
+
 - Modify: `test/test_geometry.c3`
 - Modify: `src/geometry/predicates.c3`
 - Modify: `src/c3cg.c3i`
@@ -99,6 +100,7 @@ git commit -m "geometry: add orient_3d 3D predicate with tests"
 **Objective:** Create stub, umbrella declaration, and fault-path tests. All in one GREEN commit via stub-then-replace.
 
 **Files:**
+
 - Create: `src/hull/hull_3d.c3` (stub)
 - Create: `test/test_hull_3d.c3`
 - Modify: `src/c3cg.c3i`
@@ -206,6 +208,7 @@ git commit -m "hull: add hull_3d stub with fault-path tests"
 **Objective:** Add happy-path tests AND the full implementation in one GREEN commit. Tests fail against the stub, implementation makes them pass. Single commit — no RED state committed.
 
 **Files:**
+
 - Modify: `test/test_hull_3d.c3`
 - Modify: `src/hull/hull_3d.c3`
 
@@ -214,7 +217,7 @@ git commit -m "hull: add hull_3d stub with fault-path tests"
 Add `import cg::geometry;` and `import cg::half_edge;` to the test file imports. Then append:
 
 ```c3
-const float M8_EPSILON = 0.001f;
+const float HULL_3D_TEST_EPSILON = 0.001f;
 
 fn void test_hull_3d_tetrahedron() @test
 {
@@ -301,7 +304,7 @@ fn void test_hull_3d_cube_convexity() @test
                 mesh.positions[(int)verts[0]],
                 mesh.positions[(int)verts[1]],
                 mesh.positions[(int)verts[2]],
-                pts[j], M8_EPSILON) != geometry::PREDICATE_POSITIVE);
+                pts[j], HULL_3D_TEST_EPSILON) != geometry::PREDICATE_POSITIVE);
         }
     }
 }
@@ -329,6 +332,7 @@ git commit -m "test: add hull_3d happy-path tests (expect FAIL vs stub)"
 **Objective:** Replace the stub with the full incremental hull algorithm.
 
 **Files:**
+
 - Modify: `src/hull/hull_3d.c3`
 
 **Step 1: Write implementation**
@@ -632,6 +636,7 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
 ```
 
 **Implementation notes for the agent:**
+
 - `int[3][4] tet_faces` = C3 syntax: 4 elements of `int[3]`. Initialize with `{ ct0, ct1, ct2 }` (single braces per element).
 - `int[2][3] edges` = 3 elements of `int[2]`.
 - HashMap insert: `int[<2>] key = { v0, v1 }; edge_map[key] = value;`
@@ -703,6 +708,7 @@ git commit -m "hull: final verification pass"
 ## Implementation Notes
 
 ### C3 0.8.0 fixed-array syntax
+
 ```c3
 int[4] arr;                    // 4 ints
 int[3][4] matrix;              // 4 × int[3] (row-major: matrix[row][col])
@@ -711,6 +717,7 @@ int[2][3] edges = { { v0, v1 }, { v1, v2 }, { v2, v0 } };
 ```
 
 ### HashMap patterns (from builder.c3)
+
 ```c3
 HashMap{int[<2>], int} map;
 map.init(alloc);
@@ -723,25 +730,27 @@ map.init(alloc);                       // re-init (valid after free)
 ```
 
 ### Compacted output
+
 The mesh uses only vertices that appear in at least one face. Interior points, coplanar face points, and duplicates are excluded from the output mesh. A `used[]` bitmask + `final_remap[]` pass ensures this.
 
 ### Memory ownership
 
 All scratch arrays use `defer catch free(...)`. The critical invariant:
+
 - `mesh.validate()!` runs **before** any explicit `free()` calls.
 - If `validate()` or `from_triangles()` faults, all arrays are freed by their `defer catch` handlers.
 - On the success path, `validate()` passes, then explicit `free()`s run, `defer catch` does not fire (no fault), and `mesh` is returned to the caller.
 
-| Array | Cleanup |
-|-------|---------|
-| `indices` | Explicit `free` + `defer catch` |
-| `compacted` | Explicit `free` + `defer catch` |
-| `remap` | Explicit `free` + `defer catch` |
-| `faces` | Explicit `free` + `defer catch` |
-| `edge_map` | `edge_map.free()` per iteration + `defer catch` covers fault exit |
-| `horizon_from/to` | Explicit `free` per iteration + `defer catch` |
-| `used` | Explicit `free` + `defer catch` |
-| `final_positions` | Explicit `free` + `defer catch` |
-| `final_remap` | Explicit `free` + `defer catch` |
-| `tri_indices` | Explicit `free` + `defer catch` |
-| `HalfEdgeMesh` | Caller via `mesh.destroy()`. On fault, `defer catch mesh.destroy()` |
+| Array             | Cleanup                                                             |
+| ----------------- | ------------------------------------------------------------------- |
+| `indices`         | Explicit `free` + `defer catch`                                     |
+| `compacted`       | Explicit `free` + `defer catch`                                     |
+| `remap`           | Explicit `free` + `defer catch`                                     |
+| `faces`           | Explicit `free` + `defer catch`                                     |
+| `edge_map`        | `edge_map.free()` per iteration + `defer catch` covers fault exit   |
+| `horizon_from/to` | Explicit `free` per iteration + `defer catch`                       |
+| `used`            | Explicit `free` + `defer catch`                                     |
+| `final_positions` | Explicit `free` + `defer catch`                                     |
+| `final_remap`     | Explicit `free` + `defer catch`                                     |
+| `tri_indices`     | Explicit `free` + `defer catch`                                     |
+| `HalfEdgeMesh`    | Caller via `mesh.destroy()`. On fault, `defer catch mesh.destroy()` |

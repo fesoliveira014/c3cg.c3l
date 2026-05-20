@@ -4,7 +4,7 @@ import cg::hull;
 import cg::geometry;
 import cg::half_edge;
 
-const float M8_EPSILON = 0.001f;
+const float HULL_3D_TEST_EPSILON = 0.001f;
 
 fn void test_hull_3d_empty_faults() @test
 {
@@ -143,7 +143,7 @@ fn void test_hull_3d_cube_convexity() @test
                 mesh.positions[(int)verts[0]],
                 mesh.positions[(int)verts[1]],
                 mesh.positions[(int)verts[2]],
-                pts[j], M8_EPSILON) != geometry::PREDICATE_POSITIVE);
+                pts[j], HULL_3D_TEST_EPSILON) != geometry::PREDICATE_POSITIVE);
         }
     }
 }
