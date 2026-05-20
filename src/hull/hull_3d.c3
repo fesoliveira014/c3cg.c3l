@@ -96,12 +96,6 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
     int ct2 = remap[t2];
     int ct3 = remap[t3];
 
-    Vec3f centroid = {
-        (compacted[ct0].x + compacted[ct1].x + compacted[ct2].x + compacted[ct3].x) / 4.0f,
-        (compacted[ct0].y + compacted[ct1].y + compacted[ct2].y + compacted[ct3].y) / 4.0f,
-        (compacted[ct0].z + compacted[ct1].z + compacted[ct2].z + compacted[ct3].z) / 4.0f,
-    };
-
     // Face list + edge map.
     usz face_cap = H3_FACE_CAP_FACTOR * unique_count;
     H3Face[] faces = mem::alloc::new_array(alloc, H3Face, (sz) face_cap);
@@ -120,11 +114,14 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
         { ct1, ct3, ct2 },
     };
 
+    int[4] tet_opposite = { ct3, ct2, ct1, ct0 };
+
     for (int fi = 0; fi < 4; fi++) {
         int v0 = tet_faces[fi][0];
         int v1 = tet_faces[fi][1];
         int v2 = tet_faces[fi][2];
-        if (geometry::orient_3d(compacted[v0], compacted[v1], compacted[v2], centroid,
+        if (geometry::orient_3d(compacted[v0], compacted[v1], compacted[v2],
+                compacted[tet_opposite[fi]],
                 geometry::GEOMETRY_EPSILON) == geometry::PREDICATE_POSITIVE) {
             int tmp = v1; v1 = v2; v2 = tmp;
         }
@@ -233,9 +230,6 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
         }
     }
 
-    edge_map.free();
-    free(remap);
-
     // Phase 2 — build used-vertex-only mesh.
     bool[] used = mem::alloc::new_array(alloc, bool, (sz) unique_count);
     defer catch free(used);
@@ -284,6 +278,8 @@ fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions)
     free(faces);
     free(compacted);
     free(indices);
+    edge_map.free();
+    free(remap);
 
     return mesh;
 }
