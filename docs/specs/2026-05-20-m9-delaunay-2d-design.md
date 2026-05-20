@@ -2,7 +2,7 @@
 
 ## Overview
 
-Bowyer-Watson algorithm for planar Delaunay triangulation. Given `Vec3f[]` positions (z ignored), returns a triangular `HalfEdgeMesh` with planar boundary. The algorithm wraps input in a super-triangle, inserts points one at a time in shuffled order, removes triangles whose circumcircle contains the new point, retriangulates the cavity, and strips the super-triangle.
+Bowyer-Watson algorithm for planar Delaunay triangulation. Given `Vec3f[]` positions (z ignored), returns a triangular `HalfEdgeMesh` with planar boundary. The algorithm wraps input in a super-triangle, inserts points one at a time in shuffled order, removes triangles whose circumcircle contains the new point, retriangulates the cavity, compacts, and strips the super-triangle.
 
 ## Module
 
@@ -27,7 +27,7 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
 
 ```c3
 struct DelaunayOptions {
-    Aabb? bounding_box;  // optional — if set, super-triangle encloses this; else auto-computed from input
+    Aabb? bounding_box;  // optional — if set, must contain all input points (else DEGENERATE_INPUT)
 }
 
 fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions options = {});
@@ -37,65 +37,84 @@ Returns a caller-owned `HalfEdgeMesh` (triangular, with planar boundary). Caller
 
 ## Algorithm
 
-### Preallocation
-
-All arrays allocated once before the insertion loop. No allocations during point insertion.
-
-| Array | Size | Purpose |
-|-------|------|---------|
-| `DelaunayFace[]` | `2n + 10` | Active triangles (max 2n for planar triangulation + margin) |
-| Edge map | `HashMap{int[<2>], int}` | Directed edge → face index. `init()` once; per-iteration `clear()` + rebuild (reuses table, no allocation) |
-| `int[] indices` | `n` | Shuffled insertion order |
-| `int[] boundary` | scratch, preallocated | Cavity boundary edges per insertion |
-
-### Phase 0 — Dedup, validate, shuffle
-
-Remove exact `(x,y)` duplicates (z ignored). If < 3 non-collinear distinct points, fault `DEGENERATE_INPUT`. Check collinearity via `orient_2d` on first 3 points.
-
-Shuffle remaining indices (Fisher-Yates or equivalent). Prealloc face array and edge map.
-
-### Phase 1 — Super-triangle
-
-Compute or use provided AABB. Margin = 10 × diagonal. Super-triangle = 3 vertices appended to positions (indices n, n+1, n+2). Build initial face list: 1 triangle `(n, n+1, n+2)` covering all input points. Register its 3 directed edges in the edge map.
+### Data structures
 
 ```c3
 struct DelaunayFace {
     VertexIndex v0, v1, v2;  // CCW order
-    bool alive;               // false = removed (bad triangle)
+    bool alive;               // false = bad triangle, pending removal
 }
 ```
 
+All arrays allocated once before the insertion loop.
+
+| Array | Size | Purpose |
+|-------|------|---------|
+| `DelaunayFace[]` | `3n + 10` | Face list (≥ 2n final faces + transient dead faces during retriangulation) |
+| Edge map `HashMap{int[<2>],int}` | `init()` once | Directed edge → face index. Per-iteration `clear()` + rebuild |
+| `int[]` indices | `n` | Shuffled insertion order |
+| `int[]` boundary_from | `3n` | Cavity boundary from-vertices |
+| `int[]` boundary_to | `3n` | Cavity boundary to-vertices |
+| `Vec3f[]` working_positions | `n + 3` | Deduped positions + super-triangle vertices |
+
+### Phase 0 — Dedup, collinearity check, shuffle
+
+1. Deduplicate exact `(x,y)` duplicates (z ignored). Keep first occurrence.
+2. Collinearity scan: find first two distinct `(x,y)` points, then scan remaining for a third point with `orient_2d != PREDICATE_ZERO`. If none found → `DEGENERATE_INPUT`. If < 3 distinct points → `DEGENERATE_INPUT`.
+3. Build working positions: compacted deduped points (unique_count ≤ n). Shuffle insertion order with a deterministic seed for reproducibility.
+
+### Phase 1 — Super-triangle
+
+If `options.bounding_box` is set, validate all deduped points are inside it; if not, fault `DEGENERATE_INPUT`. Otherwise auto-compute AABB from points.
+
+Margin = 10 × diagonal. Super-triangle = 3 vertices appended to `working_positions` at indices `unique_count`, `unique_count+1`, `unique_count+2`. Formula: construct triangle strictly enclosing the AABB with margin.
+
+Build initial face `(n, n+1, n+2)` as the only alive face (CCW). Register its 3 directed edges in the edge map.
+
 ### Phase 2 — Point insertion
 
-For each shuffled point `p`:
+For each shuffled point `p` (index into `working_positions`):
 
-1. **Bad triangles** — for each alive face, check `in_circle_2d(v0, v1, v2, p) > 0` (epsilon-aware via `PREDICATE_POSITIVE`). If true, mark `alive = false`.
+1. **Bad triangles** — for each alive face, project vertices to `Vec2f { positions[v].x, positions[v].y }`. Check `in_circle_2d(a, b, c, p_xy) == PREDICATE_POSITIVE`. If true, mark `alive = false`. If no bad triangles, skip point (duplicate/coincident after dedup — should not happen, defensive skip).
 
 2. **Cavity boundary** — for each bad face, for each directed edge `(u,v)`:
    - Look up reverse edge `(v,u)` in edge map
-   - If adjacent face is alive (not bad), `(u,v)` is a cavity boundary edge
-   - Append `(u,v)` to the boundary list
+   - If reverse absent (super-triangle edge) OR reverse exists AND adjacent face is alive → `(u,v)` is cavity boundary
+   - Append `u` to `boundary_from`, `v` to `boundary_to`
 
-3. **Retriangulate** — for each boundary edge `(u,v)`, add new face `(u,v,p)` in CCW order. Register its 3 directed edges in the edge map. New face inherits the orientation of the cavity boundary.
+3. **Retriangulate** — compact bad faces first: swap-remove them, reclaiming dead slots. Then for each boundary edge `(u,v)`, add new face `(u,v,p)` in CCW order. Register its 3 directed edges in the edge map.
 
-4. **Compact** — swap-remove bad faces from the face array. `edge_map.clear()` + rebuild from alive faces.
+4. **Rebuild edge map** — `edge_map.clear()` then re-insert all alive faces.
 
 ### Phase 3 — Strip super-triangle
 
-Remove any face referencing super-triangle vertices (indices n, n+1, n+2). Compact remaining faces. The resulting mesh has a planar boundary where the super-triangle was removed.
+Remove any face referencing super-triangle vertices (indices `unique_count` through `unique_count+2`). Compact.
 
-### Phase 4 — Build HalfEdgeMesh
+### Phase 4 — Build output mesh
 
-Collect alive face vertices into `uint[]` index arrays. Call `from_triangles(alloc, positions, indices)`. Validate with `mesh.validate()`. Return.
+Build final compacted positions from `working_positions`, including only vertices referenced by surviving faces. Build remap array from working indices to final indices.
+
+Collect face vertices into `uint[]` index arrays using final remap. Call `from_triangles(alloc, final_positions, indices)`. `defer catch mesh.destroy()`.
+
+`mesh.validate()!` then free all scratch arrays. Return mesh.
 
 ## Predicates
 
-All predicates already exist in `cg::geometry`:
+All predicates already exist in `cg::geometry`. Since they take `Vec2f`, project `Vec3f` positions:
 
-| Predicate | Use |
-|-----------|-----|
-| `in_circle_2d(a,b,c,p)` | Positive → p is inside circumcircle of triangle (a,b,c) — triangle is "bad" |
-| `orient_2d(a,b,c)` | Degenerate detection (collinearity). Super-triangle orientation check. |
+```c3
+Vec2f a = { positions[v0].x, positions[v0].y };
+Vec2f b = { positions[v1].x, positions[v1].y };
+Vec2f c = { positions[v2].x, positions[v2].y };
+PredicateSign result = geometry::in_circle_2d(a, b, c, p_xy);
+```
+
+| Predicate | Use | Compare to |
+|-----------|-----|------------|
+| `in_circle_2d(a,b,c,p)` | Triangle is bad if p is inside circumcircle | `== PREDICATE_POSITIVE` |
+| `orient_2d(a,b,c)` | Collinearity check, face orientation | `!= PREDICATE_ZERO` |
+
+Cocircular points (`PREDICATE_ZERO`) are NOT treated as bad — strict-positive threshold. This produces a valid Delaunay triangulation, though not necessarily the only one.
 
 ## Faults
 
@@ -104,51 +123,61 @@ No new `faultdef` entries — reuses existing:
 | Fault | When |
 |-------|------|
 | `EMPTY_INPUT` | `positions.len == 0` |
-| `DEGENERATE_INPUT` | < 3 non-collinear distinct points |
+| `DEGENERATE_INPUT` | < 3 non-collinear distinct points, or explicit bounding box doesn't contain all points |
 
 ## Memory
 
 | Allocation | When | Freed |
 |-----------|------|-------|
-| `DelaunayFace[]` | Phase 0 (2n + 10) | Explicit `free` after `from_triangles` |
-| Edge map `HashMap` | Phase 0 (`init` once) | `free()` + `defer catch` |
-| `int[] indices` | Phase 0 (n) | Explicit `free` |
-| `int[] boundary` | Phase 0 (scratch, 3n) | Explicit `free` |
-| `HalfEdgeMesh` | Phase 4 | Caller via `mesh.destroy()` |
+| `DelaunayFace[]` | Phase 0 (`3n + 10`) | Explicit `free` after `validate()` |
+| Edge map `HashMap` | Phase 0 (`init` once) | `free()` after `validate()` + `defer catch` |
+| `int[]` indices | Phase 0 (`n`) | Explicit `free` after `validate()` |
+| `int[]` boundary_from/to | Phase 0 (`3n` each) | Explicit `free` after `validate()` |
+| `Vec3f[]` working_positions | Phase 0 (`n + 3`) | Explicit `free` after `validate()` |
+| `Vec3f[]` final_positions | Phase 4 | Explicit `free` after `validate()` |
+| `int[]` final_remap | Phase 4 | Explicit `free` after `validate()` |
+| `uint[]` tri_indices | Phase 4 | Explicit `free` after `validate()` + `defer catch` |
+| `HalfEdgeMesh` | Phase 4 | Caller via `mesh.destroy()`. `defer catch mesh.destroy()` on fault |
 
-Cleanup order: `validate()` before explicit frees, consistent with hull_3d pattern.
+Cleanup order: `validate()` before explicit frees (no double-free from `defer catch`).
 
 ## Edge Cases
 
-- **Duplicate points**: deduplicate exact `(x,y)` before processing. z is ignored.
-- **Collinear input**: detected by `orient_2d` scan — fault early.
-- **Cocircular points**: Bowyer-Watson naturally handles these. The in-circle test marks all triangles in the cocircular set as bad when the last point is inserted. Either retriangulation is valid Delaunay.
-- **Explicit bounding box**: when `options.bounding_box` is set, use it for super-triangle sizing instead of auto-computed AABB. Useful when the desired domain extends beyond input points.
-- **Empty cavity**: if no triangles are bad, the point is inside an existing triangle's circumcircle-free zone — skip it (duplicate or already triangulated).
-- **HashMap per-iteration allocations**: calling `edge_map.clear()` then re-inserting keys reuses the existing hash table. The only heap allocation is the initial `init()`.
+- **Duplicate (x,y) points**: deduped early, first occurrence kept. Different z values are ignored.
+- **Collinear after dedup**: collinearity scan finds first 2 distinct points, then scans all remaining for non-collinear third. If none found → `DEGENERATE_INPUT`.
+- **Cocircular points**: `PREDICATE_ZERO` means not bad. Result is a valid (non-unique) Delaunay triangulation.
+- **Empty cavity**: defensive skip (should not occur after dedup + valid super-triangle).
+- **Explicit bounding box**: validated to contain all deduped points before use. If not → `DEGENERATE_INPUT`.
+- **Super-triangle sizing**: margin of 10× AABB diagonal. Super-triangle vertices are far enough that no input point's circumcircle can reach them.
+- **Deterministic shuffle**: seeded with a fixed constant for test reproducibility.
 
 ## Tests
 
 File: `test/test_delaunay_2d.c3`, module `test`.
 
-| Test | Input | Expected |
-|------|-------|----------|
-| Empty input | `{}` | `EMPTY_INPUT` |
-| 1 point | 1 point | `DEGENERATE_INPUT` |
-| 2 points | 2 points | `DEGENERATE_INPUT` |
-| Collinear | 3+ collinear points | `DEGENERATE_INPUT` |
-| Triangle | 3 non-collinear points | 1 face, bounded |
-| Square | 4 unit-square corners | 2 faces, Delaunay property holds |
-| Square + center | 4 corners + center point | All faces empty-circle check passes |
-| Regular grid | 3×3 grid of 9 points | All edges locally Delaunay |
-| Cocircular | 4 points on a circle | Either diagonal valid |
-| Bounding box | 4 points + explicit AABB option | Uses provided box, correct Delaunay |
+| # | Test | Input | Expected |
+|---|------|-------|----------|
+| 1 | Empty | `{}` | `EMPTY_INPUT` |
+| 2 | 1 point | 1 point | `DEGENERATE_INPUT` |
+| 3 | 2 points | 2 points | `DEGENERATE_INPUT` |
+| 4 | Collinear | 3+ collinear points | `DEGENERATE_INPUT` |
+| 5 | Collinear-first | first 3 collinear, 4th non-collinear | Valid triangulation |
+| 6 | Duplicate (x,y) | 4 points, two share (x,y) with different z | 3 unique vertices, valid, no isolated |
+| 7 | Triangle | 3 non-collinear | 1 face, bounded, no super-triangle vertices |
+| 8 | Square | 4 unit-square corners | 2 faces, Delaunay property |
+| 9 | Square + center | 4 corners + center | All faces have empty circumcircles |
+| 10 | Regular grid | 3×3 grid of 9 points | All edges locally Delaunay |
+| 11 | Cocircular | 4 points on a circle | Either diagonal is valid Delaunay |
+| 12 | Bounding box option | 4 points + explicit AABB | Uses provided box, valid |
 
-Each Delaunay-property test verifies: for every face, `in_circle_2d` of its 3 vertices + every other point is not positive (no point inside any circumcircle).
+Each Delaunay test verifies:
+- No super-triangle vertices in output
+- All faces are CCW (`orient_2d > 0`)
+- For every face, `in_circle_2d(face, every_other_point) != PREDICATE_POSITIVE`
 
 ## Non-goals
 
-- No constrained Delaunay (edge constraints)
-- No robust adaptive predicates (uses existing `in_circle_2d`)
-- No super-triangle bounding polygon (only AABB) — future `DelaunayOptions` extension
-- No 3D Delaunay — that's M12 via spherical hull
+- No constrained Delaunay
+- No robust adaptive predicates
+- No bounding polygon (only AABB) — future `DelaunayOptions` extension
+- No 3D Delaunay
