@@ -4,6 +4,8 @@ import cg::hull;
 import cg::geometry;
 import cg::half_edge;
 
+const float M8_EPSILON = 0.001f;
+
 fn void test_hull_3d_empty_faults() @test
 {
     Vec3f[] positions = {};
@@ -55,8 +57,6 @@ fn void test_hull_3d_coplanar_faults() @test
     }
     unreachable();
 }
-
-const float M8_EPSILON = 0.001f;
 
 fn void test_hull_3d_tetrahedron() @test
 {
