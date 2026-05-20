@@ -85,6 +85,7 @@ const PredicateSign PREDICATE_POSITIVE = (PredicateSign)1;
 fn PredicateSign orient_2d(Vec2f a, Vec2f b, Vec2f c, float epsilon = DEFAULT_PREDICATE_EPSILON);
 fn PredicateSign in_circle_2d(Vec2f a, Vec2f b, Vec2f c, Vec2f p, float epsilon = DEFAULT_PREDICATE_EPSILON);
 fn PredicateSign on_sphere(Vec3f a, Vec3f b, Vec3f c, Vec3f d, Vec3f p, float epsilon = DEFAULT_PREDICATE_EPSILON);
+fn PredicateSign orient_3d(Vec3f a, Vec3f b, Vec3f c, Vec3f d, float epsilon = DEFAULT_PREDICATE_EPSILON);
 
 fn Vec3f? circumcenter_planar(Vec3f a, Vec3f b, Vec3f c);
 fn Vec3f? circumcenter_on_sphere(Vec3f a, Vec3f b, Vec3f c, float radius);

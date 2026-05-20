@@ -356,3 +356,24 @@ fn void test_face_centroid_scalar_matches_batch() @test
     Vec3f scalar = geometry::face_centroid(&mesh, (FaceIndex)0)!!;
     assert(m5_vec3_approx(scalar, batch[0]));
 }
+
+fn void test_orient_3d_positive() @test
+{
+    assert(geometry::orient_3d({0,1,0}, {1,0,0}, {0,0,1}, {0,0,0}) == geometry::PREDICATE_POSITIVE);
+}
+
+fn void test_orient_3d_negative() @test
+{
+    assert(geometry::orient_3d({1,0,0}, {0,1,0}, {0,0,1}, {0,0,0}) == geometry::PREDICATE_NEGATIVE);
+}
+
+fn void test_orient_3d_zero_coplanar() @test
+{
+    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0}) == geometry::PREDICATE_ZERO);
+}
+
+fn void test_orient_3d_epsilon() @test
+{
+    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0.000001f}, 0.0f) == geometry::PREDICATE_POSITIVE);
+    assert(geometry::orient_3d({0,0,0}, {1,0,0}, {0,1,0}, {1,1,0.000001f}, 0.01f) == geometry::PREDICATE_ZERO);
+}

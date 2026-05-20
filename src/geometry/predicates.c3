@@ -93,3 +93,16 @@ fn PredicateSign on_sphere(Vec3f a, Vec3f b, Vec3f c, Vec3f d, Vec3f p, float ep
 
     return classify_predicate(value, epsilon);
 }
+
+fn float orient_3d_det(Vec3f a, Vec3f b, Vec3f c, Vec3f d)
+{
+    Vec3f ab = vec3_sub_for_predicates(b, a);
+    Vec3f ac = vec3_sub_for_predicates(c, a);
+    Vec3f ad = vec3_sub_for_predicates(d, a);
+    return det3(ab.x, ab.y, ab.z, ac.x, ac.y, ac.z, ad.x, ad.y, ad.z);
+}
+
+fn PredicateSign orient_3d(Vec3f a, Vec3f b, Vec3f c, Vec3f d, float epsilon = DEFAULT_PREDICATE_EPSILON)
+{
+    return classify_predicate(orient_3d_det(a, b, c, d), epsilon);
+}
