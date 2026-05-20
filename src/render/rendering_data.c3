@@ -4,45 +4,6 @@ import cg::half_edge;
 
 const float PLANAR_EPSILON = 0.00001;
 
-enum RenderNormalMode : uint
-{
-    RENDER_NORMAL_NONE,
-    RENDER_NORMAL_SOURCE,
-    RENDER_NORMAL_SMOOTH,
-    RENDER_NORMAL_FLAT,
-}
-
-enum RenderUvMode : uint
-{
-    RENDER_UV_NONE,
-    RENDER_UV_SOURCE,
-    RENDER_UV_SOURCE_OR_ZERO,
-    RENDER_UV_PLANAR_PROJECT,
-}
-
-bitstruct RenderOptions : uint
-{
-    uint normal_mode : 0..1;
-    uint uv_mode : 2..3;
-    bool skip_planarity_check : 4;
-    uint reserved : 5..31;
-}
-
-const RenderOptions DEFAULT_RENDER_OPTIONS = {
-    .normal_mode = (uint)RenderNormalMode.RENDER_NORMAL_NONE,
-    .uv_mode = (uint)RenderUvMode.RENDER_UV_NONE,
-    .skip_planarity_check = false,
-    .reserved = 0,
-};
-
-struct RenderingData
-{
-    Vec3f[] vertices;
-    uint[] indices;
-    Vec3f[] normals;
-    Vec2f[] uvs;
-}
-
 fn void RenderingData.destroy(&self)
 {
     free(self.vertices);

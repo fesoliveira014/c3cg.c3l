@@ -7,13 +7,6 @@ const usz DUAL_SCRATCH_INITIAL = 3;
 const usz DUAL_SCRATCH_GROWTH = 2;
 const float DUAL_DEFAULT_RADIUS = 1.0f;
 
-enum DualMode : uint
-{
-    CIRCUMCENTER,
-    CENTROID,
-    SPHERICAL_CIRCUMCENTER,
-}
-
 fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] dual_vertex_positions)
 {
     mesh.validate()!;

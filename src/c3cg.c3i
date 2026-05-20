@@ -1,1 +1,165 @@
 module cg;
+
+typedef HeIndex     = inline int;
+typedef FaceIndex   = inline int;
+typedef VertexIndex = inline int;
+
+alias Vec2f = float[<2>];
+alias Vec3f = float[<3>];
+alias Vec4f = float[<4>];
+alias Vec2i = int[<2>];
+alias Vec3i = int[<3>];
+
+const HeIndex     INVALID_HE     = (HeIndex)-1;
+const FaceIndex   INVALID_FACE   = (FaceIndex)-1;
+const VertexIndex INVALID_VERTEX = (VertexIndex)-1;
+
+struct Aabb {
+    Vec3f min;
+    Vec3f max;
+}
+
+struct HalfEdge {
+    VertexIndex origin;
+    HeIndex     next;
+    HeIndex     twin;
+    FaceIndex   face;
+}
+
+struct HalfEdgeFace {
+    HeIndex half_edge;
+}
+
+struct HalfEdgeVertex {
+    HeIndex half_edge;
+}
+
+struct HalfEdgeMesh {
+    HalfEdge[]       half_edges;
+    HalfEdgeFace[]   faces;
+    HalfEdgeVertex[] vertices;
+    Vec3f[]          positions;
+    Vec3f[]          normals;
+    Vec2f[]          uvs;
+}
+
+faultdef
+    INDEX_OUT_OF_RANGE,
+    INVALID_TRIANGLE_INDEX_COUNT,
+    NON_MANIFOLD_INPUT,
+    DUPLICATE_HALF_EDGE,
+    EDGE_ALREADY_EXISTS,
+    NON_TRIANGLE_FACE,
+    BOUNDARY_HALF_EDGE,
+    DEGENERATE_INPUT,
+    EMPTY_INPUT,
+    ATTRIBUTE_COUNT_MISMATCH,
+    OUTPUT_BUFFER_TOO_SMALL,
+    INVALID_HALF_EDGE_REFERENCE,
+    INVALID_VERTEX_REFERENCE,
+    INVALID_FACE_REFERENCE,
+    INVALID_TWIN,
+    INVALID_FACE_CYCLE,
+    INVALID_TOPOLOGY,
+    INVALID_RENDER_OPTIONS,
+    MISSING_NORMALS,
+    MISSING_UVS,
+    NON_PLANAR_FACE,
+    OPEN_CELL_ON_BOUNDARY,
+    DUAL_REQUIRES_CLOSED_MESH,
+    DUAL_VERTEX_COUNT_MISMATCH;
+
+// ── cg::geometry ────────────────────────────────────────────
+
+module cg::geometry;
+import cg;
+
+typedef PredicateSign = int;
+
+const float GEOMETRY_EPSILON = 0.00001f;
+const float DEFAULT_PREDICATE_EPSILON = 0.00001f;
+const PredicateSign PREDICATE_NEGATIVE = (PredicateSign)-1;
+const PredicateSign PREDICATE_ZERO = (PredicateSign)0;
+const PredicateSign PREDICATE_POSITIVE = (PredicateSign)1;
+
+fn PredicateSign orient_2d(Vec2f a, Vec2f b, Vec2f c, float epsilon = DEFAULT_PREDICATE_EPSILON);
+fn PredicateSign in_circle_2d(Vec2f a, Vec2f b, Vec2f c, Vec2f p, float epsilon = DEFAULT_PREDICATE_EPSILON);
+fn PredicateSign on_sphere(Vec3f a, Vec3f b, Vec3f c, Vec3f d, Vec3f p, float epsilon = DEFAULT_PREDICATE_EPSILON);
+
+fn Vec3f? circumcenter_planar(Vec3f a, Vec3f b, Vec3f c);
+fn Vec3f? circumcenter_on_sphere(Vec3f a, Vec3f b, Vec3f c, float radius);
+fn Vec3f[]? circumcenters_planar(Allocator alloc, HalfEdgeMesh* tri_mesh);
+fn Vec3f[]? circumcenters_on_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, float radius);
+
+fn Vec3f? face_centroid(HalfEdgeMesh* mesh, FaceIndex face);
+fn Vec3f[]? face_centroids(Allocator alloc, HalfEdgeMesh* mesh);
+
+// ── cg::half_edge ───────────────────────────────────────────
+
+module cg::half_edge;
+import cg;
+
+fn HalfEdgeMesh? from_triangles(Allocator alloc, Vec3f[] positions, uint[] indices);
+fn HalfEdgeMesh? from_triangles_with_attrs(Allocator alloc, Vec3f[] positions, Vec3f[] normals, Vec2f[] uvs, uint[] indices);
+fn HalfEdgeMesh? from_polygons(Allocator alloc, Vec3f[] positions, uint[] face_offsets, uint[] face_indices);
+
+// ── cg::dual ────────────────────────────────────────────────
+
+module cg::dual;
+import cg;
+import cg::geometry;
+
+enum DualMode : uint {
+    CIRCUMCENTER,
+    CENTROID,
+    SPHERICAL_CIRCUMCENTER,
+}
+
+fn HalfEdgeMesh? dual_from_vertices(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] dual_vertex_positions);
+fn HalfEdgeMesh? dual(Allocator alloc, HalfEdgeMesh* mesh, DualMode mode = DualMode.CIRCUMCENTER, float radius = 1.0f);
+
+// ── cg::render ──────────────────────────────────────────────
+
+module cg::render;
+import cg;
+
+enum RenderNormalMode : uint {
+    RENDER_NORMAL_NONE,
+    RENDER_NORMAL_SOURCE,
+    RENDER_NORMAL_SMOOTH,
+    RENDER_NORMAL_FLAT,
+}
+
+enum RenderUvMode : uint {
+    RENDER_UV_NONE,
+    RENDER_UV_SOURCE,
+    RENDER_UV_SOURCE_OR_ZERO,
+    RENDER_UV_PLANAR_PROJECT,
+}
+
+bitstruct RenderOptions : uint {
+    uint normal_mode : 0..1;
+    uint uv_mode : 2..3;
+    bool skip_planarity_check : 4;
+    uint reserved : 5..31;
+}
+
+const RenderOptions DEFAULT_RENDER_OPTIONS = {
+    .normal_mode = (uint)RenderNormalMode.RENDER_NORMAL_NONE,
+    .uv_mode = (uint)RenderUvMode.RENDER_UV_NONE,
+    .skip_planarity_check = false,
+};
+
+struct RenderingData {
+    Vec3f[] vertices;
+    uint[]  indices;
+    Vec3f[] normals;
+    Vec2f[] uvs;
+}
+
+// ── cg::hull ────────────────────────────────────────────────
+
+module cg::hull;
+import cg;
+
+fn int[]? hull_2d(Allocator alloc, Vec3f[] positions);

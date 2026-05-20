@@ -250,7 +250,7 @@ fn void test_hull_square_collinear_on_edges() @test
     // Collinear edge points MUST be included (spec requirement).
     assert(m7_find_in_slice(hull, 4) >= 0);  // (0.5, 0) on bottom edge
     assert(m7_find_in_slice(hull, 5) >= 0);  // (0, 0.5) on left edge
-    
+
     // All 4 corners must also be present.
     for (int i = 0; i < 4; i++) {
         assert(m7_find_in_slice(hull, i) >= 0);
@@ -531,6 +531,7 @@ fn int compare_by_position(void* ctx, int a, int b)
 ```
 
 Key points:
+
 - Comparator returns `int`: negative / zero / positive (not `bool`).
 - Context is passed as `void*`, cast to the expected type inside the comparator.
 - `sort::quicksort` takes `(slice, &comparator, context)`.
@@ -541,11 +542,11 @@ During hull construction, we pass `epsilon = 0.0f` to `orient_2d`. We pop only o
 
 ### Memory ownership
 
-| Array | Allocator | Freed by |
-|-------|-----------|----------|
-| `indices` | `alloc` | Always freed before return (success or failure) |
-| `hull` (stack) | `alloc` | Always freed before return |
-| `result` | `alloc` | Owned by caller — freed via `defer free(result)` at call site |
+| Array          | Allocator | Freed by                                                      |
+| -------------- | --------- | ------------------------------------------------------------- |
+| `indices`      | `alloc`   | Always freed before return (success or failure)               |
+| `hull` (stack) | `alloc`   | Always freed before return                                    |
+| `result`       | `alloc`   | Owned by caller — freed via `defer free(result)` at call site |
 
 ### No project.json changes needed
 

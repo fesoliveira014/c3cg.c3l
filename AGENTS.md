@@ -74,12 +74,11 @@ The library is organised around a single `HalfEdgeMesh` type that represents bot
 
 ### Module Layout
 
+All type, enum, struct, constant, and public free-function declarations live in a single umbrella interface file `src/c3cg.c3i`. Implementation files (`src/<module>/*.c3`) contain only `module`, `import`, and function bodies. This keeps the library interface in one place for external callers.
+
 ```
 src/
-├── cg.c3                  module cg;          umbrella
-├── types.c3               Vec aliases, HeIndex, FaceIndex, VertexIndex, Aabb
-├── half_edge_mesh.c3      HalfEdge, HalfEdgeFace, HalfEdgeVertex, HalfEdgeMesh structs
-├── faults.c3              Cross-cutting faults
+├── c3cg.c3i               module cg; module cg::geometry; module cg::half_edge; ...  (umbrella interface)
 │
 ├── render/                module cg::render    RenderingData + to_rendering_data
 ├── half_edge/             module cg::half_edge   builder, topology, walks, flip, validate
@@ -94,6 +93,10 @@ src/
 └── primitives/            module cg::primitives   Icosphere, platonic solids
 test/
 ```
+
+**Interface convention:** `src/c3cg.c3i` is the single source of truth for all public API declarations.
+When adding a new submodule, add its free-function signatures and type/enum/const declarations to the umbrella.
+Method declarations on structs live in their implementation `.c3` files (not the umbrella — C3 0.8.0 treats method declarations as definitions).
 
 ### Core Types
 
@@ -180,7 +183,7 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 | M4 | Edge flipping | ✅ Complete |
 | M5 | Geometry helpers (circumcenters, centroids, predicates) | ✅ Complete |
 | M6 | Dual operation | ✅ Complete |
-| M7 | Convex hull 2D (Andrew's monotone chain) | Not started |
+| M7 | Convex hull 2D (Andrew's monotone chain) | ✅ Complete |
 | M8 | Convex hull 3D (incremental) | Not started |
 | M9 | Delaunay 2D (Bowyer-Watson) | Not started |
 | M10 | Voronoi from Delaunay (unbounded) | Not started |

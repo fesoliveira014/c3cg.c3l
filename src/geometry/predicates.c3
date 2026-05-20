@@ -1,14 +1,6 @@
 module cg::geometry;
 import cg;
 
-typedef PredicateSign = int;
-
-const float GEOMETRY_EPSILON = 0.00001f;
-const float DEFAULT_PREDICATE_EPSILON = 0.00001f;
-const PredicateSign PREDICATE_NEGATIVE = (PredicateSign)-1;
-const PredicateSign PREDICATE_ZERO = (PredicateSign)0;
-const PredicateSign PREDICATE_POSITIVE = (PredicateSign)1;
-
 fn float abs_float(float value)
 {
     if (value < 0.0f) return -value;
