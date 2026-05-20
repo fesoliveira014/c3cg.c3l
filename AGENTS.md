@@ -14,6 +14,7 @@ c3c clean               # wipe build/
 ```
 
 Verification before every commit:
+
 ```bash
 c3c build debug && c3c test
 ```
@@ -28,13 +29,13 @@ For any non-trivial code change, use `test-driven-development` (write failing te
 
 Source of truth: `docs/style.md`. This guide wins over any other style guidance.
 
-| Kind | Convention | Examples |
-|------|-----------|----------|
-| Variables, fields, params, functions, methods | `snake_case` | `voxel_size`, `from_triangles` |
-| Structs, enums, typedefs, aliases | `PascalCase` | `HalfEdgeMesh`, `HeIndex` |
-| Constants, enum values | `SCREAMING_SNAKE_CASE` | `BRICK_DIM`, `INVALID_HE` |
-| Module names | lowercase, dotted | `cg::half_edge` |
-| File names | `snake_case.c3` | `half_edge_mesh.c3` |
+| Kind                                          | Convention             | Examples                       |
+| --------------------------------------------- | ---------------------- | ------------------------------ |
+| Variables, fields, params, functions, methods | `snake_case`           | `voxel_size`, `from_triangles` |
+| Structs, enums, typedefs, aliases             | `PascalCase`           | `HalfEdgeMesh`, `HeIndex`      |
+| Constants, enum values                        | `SCREAMING_SNAKE_CASE` | `BRICK_DIM`, `INVALID_HE`      |
+| Module names                                  | lowercase, dotted      | `cg::half_edge`                |
+| File names                                    | `snake_case.c3`        | `half_edge_mesh.c3`            |
 
 Definition order within a file: typedefs → aliases → constants → enums → structs → struct methods → free functions.
 
@@ -95,12 +96,18 @@ test/
 ```
 
 **Interface convention:** `src/c3cg.c3i` is the single source of truth for all public API declarations.
-When adding a new submodule, add its free-function signatures and type/enum/const declarations to the umbrella.
-Method declarations on structs live in their implementation `.c3` files (not the umbrella — C3 0.8.0 treats method declarations as definitions).
+
+When adding a new submodule (e.g., M8 `cg::hull_3d`), follow this checklist:
+1. **Add free-function signatures + type/enum/const declarations** to `src/c3cg.c3i` under the appropriate `module cg::xxx;` section.
+2. **Add implementations** to the submodule's `.c3` file(s) — `module`, `import`, function bodies only (no type/const redeclarations).
+3. Method declarations on structs stay in their `.c3` files — C3 0.8.0 treats method declarations as definitions and they will conflict with the umbrella.
+
+Both the umbrella declarations and `.c3` definitions are visible to consumers at compile time — the umbrella is additive, not restrictive.
 
 ### Core Types
 
-**Identifier typedefs** (in `types.c3`):
+**Identifier typedefs** (in `src/c3cg.c3i`):
+
 ```c3
 typedef HeIndex     = inline int;
 typedef FaceIndex   = inline int;
@@ -111,6 +118,7 @@ const VertexIndex INVALID_VERTEX = (VertexIndex)-1;
 ```
 
 **HalfEdgeMesh** — flat arrays, integer indices, no internal pointers:
+
 ```c3
 struct HalfEdgeMesh {
     HalfEdge[]       half_edges;       // topology
@@ -126,16 +134,19 @@ struct HalfEdgeVertex { HeIndex half_edge; }
 ```
 
 **RenderingData** — caller-owned, GPU-uploadable:
+
 ```c3
 struct RenderingData { Vec3f[] vertices; uint[] indices; Vec3f[] normals; Vec2f[] uvs; }
 ```
 
 **VoronoiDiagram** — polygonal mesh + parallel sites array:
+
 ```c3
 struct VoronoiDiagram { HalfEdgeMesh mesh; Vec3f[] sites; }
 ```
 
 **VoronoiGraph** — flat per-cell access via CSR storage (no half-edge walking):
+
 ```c3
 struct VoronoiGraph {
     Vec3f[] vertices, sites, centroids;
@@ -146,6 +157,7 @@ struct VoronoiGraph {
 ```
 
 **DelaunayGraph** — flat per-triangle view:
+
 ```c3
 struct DelaunayGraph {
     Vec3f[] vertices, circumcenters;
@@ -174,35 +186,37 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 
 ## Development Plan (14 Milestones)
 
-| Milestone | What | Status |
-|-----------|------|--------|
-| M0 | Project scaffolding — types, faults, struct stubs | ✅ Complete |
-| M1 | Half-edge construction (`from_triangles`) + topology queries | ✅ Complete |
-| M2 | Walks + validation | ✅ Complete |
-| M3 | Rendering data extraction | ✅ Complete |
-| M4 | Edge flipping | ✅ Complete |
-| M5 | Geometry helpers (circumcenters, centroids, predicates) | ✅ Complete |
-| M6 | Dual operation | ✅ Complete |
-| M7 | Convex hull 2D (Andrew's monotone chain) | ✅ Complete |
-| M8 | Convex hull 3D (incremental) | Not started |
-| M9 | Delaunay 2D (Bowyer-Watson) | Not started |
-| M10 | Voronoi from Delaunay (unbounded) | Not started |
-| M11 | Bounded Voronoi (in_polygon, in_box) | Not started |
-| M12 | Spherical Delaunay + Voronoi | Not started |
-| M13 | Voronoi/Delaunay graph views | Not started |
-| M14 | Polygon triangulation, Loop subdivision, primitives | Not started |
+| Milestone | What                                                         | Status      |
+| --------- | ------------------------------------------------------------ | ----------- |
+| M0        | Project scaffolding — types, faults, struct stubs            | ✅ Complete |
+| M1        | Half-edge construction (`from_triangles`) + topology queries | ✅ Complete |
+| M2        | Walks + validation                                           | ✅ Complete |
+| M3        | Rendering data extraction                                    | ✅ Complete |
+| M4        | Edge flipping                                                | ✅ Complete |
+| M5        | Geometry helpers (circumcenters, centroids, predicates)      | ✅ Complete |
+| M6        | Dual operation                                               | ✅ Complete |
+| M7        | Convex hull 2D (Andrew's monotone chain)                     | ✅ Complete |
+| M8        | Convex hull 3D (incremental)                                 | Not started |
+| M9        | Delaunay 2D (Bowyer-Watson)                                  | Not started |
+| M10       | Voronoi from Delaunay (unbounded)                            | Not started |
+| M11       | Bounded Voronoi (in_polygon, in_box)                         | Not started |
+| M12       | Spherical Delaunay + Voronoi                                 | Not started |
+| M13       | Voronoi/Delaunay graph views                                 | Not started |
+| M14       | Polygon triangulation, Loop subdivision, primitives          | Not started |
 
 Each milestone = commit(s) with tests. `c3c build && c3c test` green at every boundary.
 
 ## Open Questions (Resolved in M0)
 
 These were verified with `c3-expert` during M0 on c3c 0.7.11 and rechecked as needed during the C3 0.8.0 migration:
+
 - [x] Vector type spelling: `float[<3>]` — used with local aliases (`Vec2f`, etc.)
 - [x] Methods on imported types: confirmed working with `smoke/smoke.c3` + test
 - [x] `project.json` shape for library — `static-lib` + `debug` + `release` targets
 - [x] Test annotations (`@test`) — after params in test `.c3` files, `assert()` per style §11
 
 Deferred to later milestones:
+
 - HashMap instantiation syntax — needed in M1 (twin-pairing)
 - Allocator-passing convention — needed in M1 (construction)
 - `*self = {}` zero-clear syntax — needed in M1 (`destroy`)
