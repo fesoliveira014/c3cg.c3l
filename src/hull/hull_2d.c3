@@ -3,6 +3,9 @@ import cg;
 import cg::geometry;
 import std::sort;
 
+const float HULL_EPSILON = 0.0f;
+const usz HULL_STACK_FACTOR = 2;
+
 struct SortCtx {
     Vec3f[] positions;
 }
@@ -32,7 +35,7 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
 
     // Phase 2 — lower hull (left-to-right sweep).
     // Pop only on strict CW (PREDICATE_NEGATIVE), keeping collinear boundary points.
-    int[] hull = mem::alloc::new_array(alloc, int, (sz)(2 * positions.len));
+    int[] hull = mem::alloc::new_array(alloc, int, (sz)(HULL_STACK_FACTOR * positions.len));
     defer catch free(hull);
     usz hull_len = 0;
 
@@ -44,7 +47,7 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
             int b = hull[hull_len - 1];
             Vec2f a2 = { positions[a].x, positions[a].y };
             Vec2f b2 = { positions[b].x, positions[b].y };
-            if (geometry::orient_2d(a2, b2, p2, 0.0f) != geometry::PREDICATE_NEGATIVE) break;
+            if (geometry::orient_2d(a2, b2, p2, HULL_EPSILON) != geometry::PREDICATE_NEGATIVE) break;
             hull_len--;
         }
         hull[hull_len] = p;
@@ -60,7 +63,7 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
             int b = hull[hull_len - 1];
             Vec2f a2 = { positions[a].x, positions[a].y };
             Vec2f b2 = { positions[b].x, positions[b].y };
-            if (geometry::orient_2d(a2, b2, p2, 0.0f) != geometry::PREDICATE_NEGATIVE) break;
+            if (geometry::orient_2d(a2, b2, p2, HULL_EPSILON) != geometry::PREDICATE_NEGATIVE) break;
             hull_len--;
         }
         hull[hull_len] = p;
