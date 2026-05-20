@@ -3,14 +3,14 @@ import cg;
 import cg::hull;
 import cg::geometry;
 
-const float HULL_TEST_EPSILON = 0.001f;
+const int NOT_FOUND = -1;
 
 fn int m7_find_in_slice(int[] slice, int value)
 {
     for (usz i = 0; i < slice.len; i++) {
         if (slice[i] == value) return (int)i;
     }
-    return -1;
+    return NOT_FOUND;
 }
 
 fn void test_hull_empty_input_faults() @test
@@ -92,7 +92,7 @@ fn void test_hull_square_with_interior_point() @test
     defer free(hull);
 
     assert(hull.len == 4);
-    assert(m7_find_in_slice(hull, 4) == -1);
+    assert(m7_find_in_slice(hull, 4) == NOT_FOUND);
 }
 
 fn void test_hull_square_collinear_on_edges() @test
@@ -174,8 +174,8 @@ fn void test_hull_random_cloud_points_inside() @test
     for (int i = 0; i < 6; i++) {
         assert(m7_find_in_slice(hull, i) >= 0);
     }
-    assert(m7_find_in_slice(hull, 6) == -1);
-    assert(m7_find_in_slice(hull, 7) == -1);
+    assert(m7_find_in_slice(hull, 6) == NOT_FOUND);
+    assert(m7_find_in_slice(hull, 7) == NOT_FOUND);
 
     for (usz ei = 0; ei < hull.len; ei++) {
         usz ej = (ei + (usz)1) % (usz)hull.len;
@@ -188,4 +188,49 @@ fn void test_hull_random_cloud_points_inside() @test
             assert(geometry::orient_2d(a, b, p) != geometry::PREDICATE_NEGATIVE);
         }
     }
+}
+
+fn void test_hull_duplicate_projected_points() @test
+{
+    // Points with same (x,y) but different z — z is ignored.
+    Vec3f[6] pts = {
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
+        { 0, 0, 99 },
+        { 0.5, 0.5, 42 },
+    };
+    int[] hull = hull::hull_2d(mem, pts[..])!!;
+    defer free(hull);
+
+    assert(hull.len == 4);
+    // Interior point (index 5) must NOT be in the hull.
+    assert(m7_find_in_slice(hull, 5) == NOT_FOUND);
+}
+
+fn void test_hull_exact_duplicate_points() @test
+{
+    Vec3f[6] pts = {
+        { 0, 0, 0 },
+        { 0, 0, 0 },
+        { 1, 0, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
+        { 0, 1, 0 },
+    };
+    int[] hull = hull::hull_2d(mem, pts[..])!!;
+    defer free(hull);
+
+    // Deduplication keeps first occurrence of each (x,y).
+    // The hull should contain 4 unique positions.
+    assert(hull.len == 4);
+    bool has_origin = m7_find_in_slice(hull, 0) != NOT_FOUND
+                   || m7_find_in_slice(hull, 1) != NOT_FOUND;
+    bool has_top    = m7_find_in_slice(hull, 4) != NOT_FOUND
+                   || m7_find_in_slice(hull, 5) != NOT_FOUND;
+    assert(has_origin);
+    assert(has_top);
+    assert(m7_find_in_slice(hull, 2) != NOT_FOUND);
+    assert(m7_find_in_slice(hull, 3) != NOT_FOUND);
 }

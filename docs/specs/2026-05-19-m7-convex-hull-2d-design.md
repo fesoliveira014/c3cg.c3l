@@ -8,9 +8,9 @@ The algorithm runs in O(n log n) time (dominated by the sort phase) with O(n) sc
 
 ## Module
 
-`module cg::hull;` — single file `src/hull/hull_2d.c3i` (`.c3i` extension for library code, consistent with C3 library conventions).
+`module cg::hull;` — single file `src/hull/hull_2d.c3` (`.c3` extension for implementation files; C3 0.8.0 prohibits function bodies in `.c3i`).
 
-Imports: `cg`, `cg::geometry` (for `orient_2d`), `std::sort`.
+Imports: `cg`, `cg::geometry` (for `orient_2d`), `std::sort` (for `sort::quicksort`).
 
 ## Public API
 
@@ -24,24 +24,24 @@ Returns an owned `int[]` of hull vertex indices in CCW order. The caller must `d
 
 Andrew's monotone chain in four phases:
 
-### Phase 1 — Index sort
+### Phase 1 — Index sort and deduplication
 
-Create `int[] indices = [0, 1, 2, ..., n-1]`. Sort lexicographically by `(positions[i].x, positions[i].y)`.
+Create `int[] indices = [0, 1, 2, ..., n-1]`. Sort lexicographically by `(positions[i].x, positions[i].y)`. After sorting, compact the index array to remove points with duplicate `(x, y)` coordinates (only the first occurrence of each projected position is kept).
 
 ### Phase 2 — Lower hull
 
-Sweep left-to-right over sorted indices. Maintain a stack `hull` (dynamic `int[]`). For each candidate index `p`:
+Sweep left-to-right over deduplicated indices. Maintain a stack `hull` (dynamic `int[]`). For each candidate index `p`:
 
-- While `hull.len >= 2` and `orient_2d(hull[last-1].xy, hull[last].xy, p.xy) != PREDICATE_POSITIVE`, pop the stack (epsilon = 0.0 to preserve collinear boundary points).
+- While `hull.len >= 2` and `orient_2d(hull[last-1].xy, hull[last].xy, p.xy) == PREDICATE_NEGATIVE`, pop the stack (pop only on strict CW turns; collinear and CCW turns are kept, preserving collinear boundary points).
 - Push `p`.
 
 ### Phase 3 — Upper hull
 
-Same as lower, but sweep right-to-left (reverse iteration). The upper hull sweep starts with the stack retained from the lower sweep (minus the last element to avoid the turnaround duplicate).
+Same as lower, but sweep right-to-left (reverse iteration over deduplicated indices), skipping the rightmost point (already on the lower hull).
 
 ### Phase 4 — Combine & validate
 
-Trim the duplicate seam vertices. If the resulting hull has < 3 points, fault `DEGENERATE_INPUT`. Otherwise copy the hull indices into a fresh `int[]` and return.
+Trim the last element of the hull stack (duplicate of the first element). If the resulting hull has < 3 points, fault `DEGENERATE_INPUT`. Also fault if the deduplication reduced the point count below 3.
 
 The output is CCW by construction of Andrew's monotone chain.
 
@@ -59,7 +59,7 @@ No new `faultdef` entries needed — reuses existing faults from `src/faults.c3i
 Three allocations via the caller-supplied allocator:
 
 1. Index array: `mem::alloc::new_array(alloc, int, (sz) positions.len)`
-2. Hull stack: `mem::alloc::new_array(alloc, int, (sz) positions.len)` (max hull size ≤ input size)
+2. Hull stack: `mem::alloc::new_array(alloc, int, (sz)(2 * positions.len))` (worst case all points are collinear)
 3. Output hull: `mem::alloc::new_array(alloc, int, (sz) hull_count)`
 
 Deferred free on failure: `defer catch free(...)` on the line after each allocation, consistent with `src/half_edge/builder.c3`.
@@ -75,8 +75,10 @@ File: `test/test_hull_2d.c3`, module `test`.
 3. **Two points** — faults `DEGENERATE_INPUT`.
 4. **Square** — 4 corners + 1 interior point → hull is the 4 corners in CCW order.
 5. **Collinear points** — all points on a line → faults `DEGENERATE_INPUT`.
-6. **Square + collinear edge points** — corners (0,0), (1,0), (1,1), (0,1) with extra points (0.5, 0), (0.5, 1) on edges → hull is the 4 corners. Collinear edge points are kept on the hull boundary.
-7. **Random cloud** — hull of random 2D points has all input points inside or on the hull (cross-product check).
+6. **Square + collinear edge points** — corners (0,0), (1,0), (1,1), (0,1) with extra points (0.5, 0), (0, 0.5) on edges → all boundary points (corners + edge-collinear) are included in the hull.
+7. **Duplicate projected points** — points with identical (x,y) but different z → duplicates are deduplicated, hull is correct.
+8. **Exact duplicate points** — identical points → deduplicated, hull is correct.
+9. **Random cloud** — hull of random 2D points has all input points inside or on the hull (cross-product check).
 
 ## Non-goals
 

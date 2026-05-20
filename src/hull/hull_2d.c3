@@ -33,13 +33,27 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
     SortCtx sort_ctx = { positions };
     sort::quicksort(indices, &compare_by_position, sort_ctx);
 
+    // Deduplicate: skip points with duplicate (x, y) in sorted order.
+    usz dedup_len = 0;
+    for (usz i = 0; i < indices.len; i++) {
+        if (dedup_len > 0) {
+            int prev = indices[dedup_len - 1];
+            int curr = indices[i];
+            if (positions[prev].x == positions[curr].x && positions[prev].y == positions[curr].y) {
+                continue;
+            }
+        }
+        indices[dedup_len] = indices[i];
+        dedup_len++;
+    }
+
     // Phase 2 — lower hull (left-to-right sweep).
     // Pop only on strict CW (PREDICATE_NEGATIVE), keeping collinear boundary points.
     int[] hull = mem::alloc::new_array(alloc, int, (sz)(HULL_STACK_FACTOR * positions.len));
     defer catch free(hull);
     usz hull_len = 0;
 
-    for (usz i = 0; i < indices.len; i++) {
+    for (usz i = 0; i < dedup_len; i++) {
         int p = indices[i];
         Vec2f p2 = { positions[p].x, positions[p].y };
         while (hull_len >= 2) {
@@ -55,7 +69,7 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
     }
 
     // Phase 3 — upper hull (right-to-left sweep, skip rightmost point).
-    for (int i = (int)indices.len - 1; i > 0; i--) {
+    for (int i = (int)dedup_len - 1; i > 0; i--) {
         int p = indices[i - 1];
         Vec2f p2 = { positions[p].x, positions[p].y };
         while (hull_len >= 2) {
