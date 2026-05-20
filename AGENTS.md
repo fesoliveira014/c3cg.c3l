@@ -98,6 +98,7 @@ test/
 **Interface convention:** `src/c3cg.c3i` is the single source of truth for all public API declarations.
 
 When adding a new submodule (e.g., M8 `cg::hull_3d`), follow this checklist:
+
 1. **Add free-function signatures + type/enum/const declarations** to `src/c3cg.c3i` under the appropriate `module cg::xxx;` section.
 2. **Add implementations** to the submodule's `.c3` file(s) — `module`, `import`, function bodies only (no type/const redeclarations).
 3. Method declarations on structs stay in their `.c3` files — C3 0.8.0 treats method declarations as definitions and they will conflict with the umbrella.
