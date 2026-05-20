@@ -60,8 +60,9 @@ For each remaining point `p`:
 2. **Horizon** — for each visible face, for each of its 3 directed edges `(u,v)`:
    - Look up the adjacent face via reverse edge `edge_map[(v,u)]`
    - If the adjacent face is NOT visible, `(u,v)` is a horizon edge. Append to horizon list.
-   
+
    Horizon edges are naturally ordered: after `(u,v)`, the next starts at `v`.
+
 3. **Stitch** — for each horizon edge `(u,v)`, add a new face `(v,u,p)`. The orientation `(v,u,p)` replaces the visible face's outward-facing orientation. Register the new face's 3 directed edges in the edge map.
 
 4. **Remove** — swap-remove all visible faces from the face list and update face indices in the edge map. Must be done before processing the next point.
@@ -85,6 +86,7 @@ fn PredicateSign orient_3d(Vec3f a, Vec3f b, Vec3f c, Vec3f d, float epsilon = D
 Internally, `orient_3d` computes the signed tetrahedron volume via `det3(b-a, c-a, d-a)` and classifies with `classify_predicate`. The raw determinant is a private helper.
 
 Umbrella addition (`src/c3cg.c3i`, `module cg::geometry;` section):
+
 ```c3
 fn PredicateSign orient_3d(Vec3f a, Vec3f b, Vec3f c, Vec3f d, float epsilon = DEFAULT_PREDICATE_EPSILON);
 ```
@@ -112,24 +114,24 @@ Intermediate arrays are allocated via `mem::alloc::new_array(alloc, T, (sz) coun
 
 - **Duplicate points**: deduplicate exact (x,y,z) duplicates before building. Build a compacted positions array so the output mesh has no unused isolated vertices from discarded duplicates.
 - **Collapsed tetrahedron**: if initial 4 points form a degenerate tetrahedron (orient_3d ≈ 0 with epsilon), continue scanning. Fault if none found.
-- **Inside/coplanar points**: points inside or coplanar with existing faces (orient_3d ≤ 0 per epsilon) produce no visible faces — skip them.
+- **Inside/coplanar points**: points inside or coplanar with existing faces produce no visible faces — skip them. This matches standard incremental hull behavior.
 
 ## Tests
 
 File: `test/test_hull_3d.c3`, module `test`.
 
-| Test                 | Input                        | Expected                              |
-| -------------------- | ---------------------------- | ------------------------------------- |
-| Empty input          | `{}`                         | `EMPTY_INPUT`                         |
-| 1 point              | 1 point                      | `DEGENERATE_INPUT`                    |
-| 2 points             | 2 points                     | `DEGENERATE_INPUT`                    |
-| 3 points             | 3 points                     | `DEGENERATE_INPUT`                    |
-| Coplanar points      | 4+ coplanar points           | `DEGENERATE_INPUT`                    |
-| Tetrahedron          | 4 non-coplanar points        | 4 faces, closed mesh, `validate()` OK |
-| Cube corners         | 8 corners of unit cube       | 12 faces (6 × 2), closed mesh         |
-| Cube + interior      | 8 corners + center point     | 12 faces, interior point not in mesh   |
-| Cube + face coplanar | 8 corners + point on face    | 12 faces, coplanar point skipped       |
-| Duplicate points     | 8 corners + exact duplicates | 12 faces, no isolated vertices         |
+| Test                 | Input                        | Expected                                                        |
+| -------------------- | ---------------------------- | --------------------------------------------------------------- |
+| Empty input          | `{}`                         | `EMPTY_INPUT`                                                   |
+| 1 point              | 1 point                      | `DEGENERATE_INPUT`                                              |
+| 2 points             | 2 points                     | `DEGENERATE_INPUT`                                              |
+| 3 points             | 3 points                     | `DEGENERATE_INPUT`                                              |
+| Coplanar points      | 4+ coplanar points           | `DEGENERATE_INPUT`                                              |
+| Tetrahedron          | 4 non-coplanar points        | 4 faces, closed mesh, `validate()` OK                           |
+| Cube corners         | 8 corners of unit cube       | 12 faces (6 × 2), closed mesh                                   |
+| Cube + interior      | 8 corners + center point     | 12 faces, interior point not in mesh                            |
+| Cube + face coplanar | 8 corners + point on face    | 12 faces, coplanar point skipped                                |
+| Duplicate points     | 8 corners + exact duplicates | 12 faces, no isolated vertices                                  |
 | Convexity            | Cube hull                    | all points satisfy `orient_3d(face, point) <= 0` for every face |
 
 Each test verifies: `mesh.validate()` passes, `is_boundary` false everywhere, and for convexity all input points are inside or on every hull face.
