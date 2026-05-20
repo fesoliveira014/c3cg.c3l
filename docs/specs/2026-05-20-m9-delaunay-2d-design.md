@@ -65,11 +65,11 @@ All arrays allocated once before the insertion loop.
 
 ### Phase 1 — Super-triangle
 
-If `options.bounding_box` is set, validate all deduped points are inside it; if not, fault `DEGENERATE_INPUT`. Otherwise auto-compute AABB from points.
+If `options.bounding_box` is set, validate all deduped points are inside it (x/y only, z ignored); if not, fault `DEGENERATE_INPUT`. Otherwise auto-compute AABB from points.
 
 Margin = 10 × diagonal. Super-triangle = 3 vertices appended to `working_positions` at indices `unique_count`, `unique_count+1`, `unique_count+2`. Formula: construct triangle strictly enclosing the AABB with margin.
 
-Build initial face `(n, n+1, n+2)` as the only alive face (CCW). Register its 3 directed edges in the edge map.
+Build initial face `(unique_count, unique_count+1, unique_count+2)` as the only alive face (CCW, ensured by `orient_2d` swap). Register its 3 directed edges in the edge map.
 
 ### Phase 2 — Point insertion
 
