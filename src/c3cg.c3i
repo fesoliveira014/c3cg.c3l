@@ -164,3 +164,4 @@ module cg::hull;
 import cg;
 
 fn int[]? hull_2d(Allocator alloc, Vec3f[] positions);
+fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions);
