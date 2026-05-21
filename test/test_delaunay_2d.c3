@@ -14,6 +14,23 @@ fn bool d2_is_ccw(Vec3f a, Vec3f b, Vec3f c)
     return geometry::orient_2d(a2, b2, c2) == geometry::PREDICATE_POSITIVE;
 }
 
+fn void assert_all_reverse_edges_are_twinned(HalfEdgeMesh* mesh)
+{
+    for (usz i = 0; i < mesh.half_edges.len; i++) {
+        VertexIndex from_i = mesh.half_edges[i].origin;
+        VertexIndex to_i = mesh.half_edges[mesh.half_edges[i].next].origin;
+        for (usz j = 0; j < mesh.half_edges.len; j++) {
+            if (i == j) { continue; }
+            VertexIndex from_j = mesh.half_edges[j].origin;
+            VertexIndex to_j = mesh.half_edges[mesh.half_edges[j].next].origin;
+            if (from_j == to_i && to_j == from_i) {
+                assert(mesh.half_edges[i].twin == (HeIndex)(int)j);
+                break;
+            }
+        }
+    }
+}
+
 fn void test_delaunay_2d_empty() @test
 {
     Vec3f[] pts = {};
@@ -144,6 +161,16 @@ fn void test_delaunay_2d_grid() @test
     defer mesh.destroy();
     mesh.validate()!!;
     assert(mesh.faces.len >= 8);
+}
+
+fn void test_delaunay_2d_grid_pairs_all_interior_twins() @test
+{
+    Vec3f[9] pts;
+    for (int i = 0; i < 9; i++) pts[i] = { (float)(i % 3), (float)(i / 3), 0 };
+    HalfEdgeMesh mesh = delaunay::delaunay_2d(mem, pts[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+    assert_all_reverse_edges_are_twinned(&mesh);
 }
 
 fn void test_delaunay_2d_random_regression_n8() @test

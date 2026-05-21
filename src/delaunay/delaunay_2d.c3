@@ -1,7 +1,6 @@
 module cg::delaunay;
 import cg;
 import cg::geometry;
-import cg::half_edge;
 import std::sort;
 import std::math;
 
@@ -101,6 +100,21 @@ fn HeIndex add_triangle(DelaunayBuilder* b, VertexIndex i0, VertexIndex i1, Vert
     if (twin1 != cg::INVALID_HE) { b.halfedges[twin1] = (HeIndex)(int)(3*t+1); }
     if (twin2 != cg::INVALID_HE) { b.halfedges[twin2] = (HeIndex)(int)(3*t+2); }
     return (HeIndex)(int)(3*t);
+}
+
+fn bool valid_builder_twin(DelaunayBuilder* b, HeIndex he, HeIndex twin)
+{
+    if (twin == cg::INVALID_HE) { return false; }
+    if (twin < 0 || (usz)twin >= 3 * b.face_count) { return false; }
+    if (b.halfedges[(int)twin] != he) { return false; }
+
+    HeIndex he_next = next_halfedge(he);
+    HeIndex twin_next = next_halfedge(twin);
+    VertexIndex he_from = b.triangles[(int)he];
+    VertexIndex he_to = b.triangles[(int)he_next];
+    VertexIndex twin_from = b.triangles[(int)twin];
+    VertexIndex twin_to = b.triangles[(int)twin_next];
+    return he_from == twin_to && he_to == twin_from;
 }
 
 fn HeIndex legalize(HeIndex start_he, Vec3f[] positions, DelaunayBuilder* b)
@@ -398,14 +412,43 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         if (new_v >= 0) { final_positions[(usz)new_v] = work_pos[i]; }
     }
 
-    uint[] tri_indices = mem::alloc::new_array(alloc, uint, (sz)(3 * builder.face_count));
-    defer free(tri_indices);
-    for (usz i = 0; i < 3 * builder.face_count; i++) {
-        tri_indices[i] = (uint)final_remap[(int)builder.triangles[i]];
+    usz half_edge_count = 3 * builder.face_count;
+    HalfEdgeMesh mesh;
+    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, (sz)half_edge_count);
+    defer catch free(mesh.half_edges);
+    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, (sz)builder.face_count);
+    defer catch free(mesh.faces);
+    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, (sz)final_vertex_count);
+    defer catch free(mesh.vertices);
+    mesh.positions = mem::alloc::new_array(alloc, Vec3f, (sz)final_vertex_count);
+    defer catch free(mesh.positions);
+
+    for (usz i = 0; i < final_vertex_count; i++) {
+        mesh.vertices[i].half_edge = cg::INVALID_HE;
+        mesh.positions[i] = final_positions[i];
     }
 
-    HalfEdgeMesh mesh = half_edge::from_triangles(alloc, final_positions, tri_indices)!;
-    defer catch mesh.destroy();
+    for (usz face = 0; face < builder.face_count; face++) {
+        usz base = face * 3;
+        mesh.faces[face].half_edge = (HeIndex)(int)base;
+        for (usz local = 0; local < 3; local++) {
+            usz he_index = base + local;
+            usz next_index = base + ((local + 1) % 3);
+            int new_origin = final_remap[(int)builder.triangles[he_index]];
+
+            HeIndex he = (HeIndex)(int)he_index;
+            HeIndex twin = builder.halfedges[he_index];
+            mesh.half_edges[he_index].origin = (VertexIndex)new_origin;
+            mesh.half_edges[he_index].next = (HeIndex)(int)next_index;
+            mesh.half_edges[he_index].twin = valid_builder_twin(&builder, he, twin) ? twin : cg::INVALID_HE;
+            mesh.half_edges[he_index].face = (FaceIndex)(int)face;
+
+            if (mesh.vertices[(usz)new_origin].half_edge == cg::INVALID_HE) {
+                mesh.vertices[(usz)new_origin].half_edge = (HeIndex)(int)he_index;
+            }
+        }
+    }
+
     mesh.validate()!;
     return mesh;
 }
