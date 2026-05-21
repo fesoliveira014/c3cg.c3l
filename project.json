@@ -16,6 +16,11 @@
     "release": {
       "type": "static-lib",
       "opt": "O3"
+    },
+    "bench": {
+      "type": "executable",
+      "opt": "O3",
+      "sources": ["src/**", "bench/**"]
     }
   }
 }

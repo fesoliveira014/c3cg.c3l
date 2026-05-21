@@ -364,6 +364,7 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         HeIndex t = add_triangle(&builder, e, (VertexIndex)p, builder.hull_next[(int)e],
                                   cg::INVALID_HE, cg::INVALID_HE, builder.hull_tri[(int)e]);
         builder.hull_tri[(int)p] = legalize(t + 2, work_pos, &builder);
+        builder.hull_tri[(int)e] = t;
 
         VertexIndex curr = builder.hull_next[(int)e];
         while (true) {
@@ -376,6 +377,7 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
             t = add_triangle(&builder, curr, (VertexIndex)p, qq,
                               builder.hull_tri[(int)p], cg::INVALID_HE, builder.hull_tri[(int)curr]);
             builder.hull_tri[(int)p] = legalize(t + 2, work_pos, &builder);
+            builder.hull_tri[(int)curr] = t;
 
             builder.hull_next[(int)curr] = cg::INVALID_VERTEX;
             curr = qq;
