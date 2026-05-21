@@ -449,6 +449,5 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         }
     }
 
-    mesh.validate()!;
     return mesh;
 }
