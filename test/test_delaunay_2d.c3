@@ -104,12 +104,15 @@ fn void test_delaunay_2d_square_delaunay_property() @test
         Vec3f c = mesh.positions[(int)verts[2]];
         assert(d2_is_ccw(a, b, c));
         for (usz j = 0; j < pts.len; j++) {
-            if (j == (usz)(int)verts[0] || j == (usz)(int)verts[1] || j == (usz)(int)verts[2]) continue;
-            Vec2f a2 = { a.x, a.y };
-            Vec2f b2 = { b.x, b.y };
-            Vec2f c2 = { c.x, c.y };
-            Vec2f p2 = { pts[j].x, pts[j].y };
-            assert(geometry::in_circle_2d(a2, b2, c2, p2) != geometry::PREDICATE_POSITIVE);
+            // Skip if pts[j] is one of the triangle's vertices (match by x,y).
+            Vec2f pj = { pts[j].x, pts[j].y };
+            Vec2f va2 = { a.x, a.y };
+            Vec2f vb2 = { b.x, b.y };
+            Vec2f vc2 = { c.x, c.y };
+            if ((pj.x == va2.x && pj.y == va2.y)
+                || (pj.x == vb2.x && pj.y == vb2.y)
+                || (pj.x == vc2.x && pj.y == vc2.y)) continue;
+            assert(geometry::in_circle_2d(va2, vb2, vc2, pj) != geometry::PREDICATE_POSITIVE);
         }
     }
 }

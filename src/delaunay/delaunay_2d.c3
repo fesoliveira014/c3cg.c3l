@@ -9,6 +9,8 @@ const float DELAUNAY_SUPER_MARGIN = 10.0f;
 const usz DELAUNAY_FACE_FACTOR = 3;
 const usz DELAUNAY_FACE_MARGIN = 10;
 const usz DELAUNAY_BOUNDARY_FACTOR = 3;
+const usz DELAUNAY_TRI_VERT_COUNT = 3;
+const usz DELAUNAY_SHUFFLE_MULTIPLIER = 2654435761;
 
 struct DelaunayFace {
     VertexIndex v0, v1, v2;
@@ -62,18 +64,21 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     }
     if (t2 < 0) return cg::DEGENERATE_INPUT~;
 
-    // Shuffle indices (deterministic LCG).
+    // Build working positions from deduped original indices.
+    Vec3f[] work_pos = mem::alloc::new_array(alloc, Vec3f, (sz)(unique_count + 3));
+    defer catch free(work_pos);
+    for (usz i = 0; i < unique_count; i++) work_pos[i] = positions[indices[i]];
+
+    // Rebuild indices as compact 0..unique_count-1 for insertion order, then shuffle.
+    for (usz i = 0; i < unique_count; i++) indices[i] = (int)i;
+
+    // Shuffle compact indices (deterministic LCG).
     for (usz i = unique_count; i > 1; i--) {
-        usz j = ((i - 1) * (usz)2654435761) % i;
+        usz j = ((i - 1) * DELAUNAY_SHUFFLE_MULTIPLIER) % i;
         int tmp = indices[i - 1];
         indices[i - 1] = indices[j];
         indices[j] = tmp;
     }
-
-    // Build working positions (deduped).
-    Vec3f[] work_pos = mem::alloc::new_array(alloc, Vec3f, (sz)(unique_count + 3));
-    defer catch free(work_pos);
-    for (usz i = 0; i < unique_count; i++) work_pos[i] = positions[indices[i]];
 
     // Super-triangle: AABB + margin.
     float min_x = work_pos[0].x;
