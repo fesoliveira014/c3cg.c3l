@@ -8,7 +8,7 @@ Port of the [delaunator](https://github.com/mapbox/delaunator) algorithm for pla
 
 `module cg::delaunay;` — rewritten `src/delaunay/delaunay_2d.c3`.
 
-Imports: `cg`, `cg::geometry` (`in_circle_2d`, `orient_2d`, `circumradius`), `cg::half_edge` (`from_triangles` — for final mesh build only), `std::sort`, `std::math`.
+Imports: `cg`, `cg::geometry` (`in_circle_2d`, `orient_2d`), `std::sort`, `std::math`. No `cg::half_edge` import needed — mesh built manually at end.
 
 Umbrella unchanged.
 
@@ -26,12 +26,13 @@ Instead of modifying `HalfEdgeMesh` during insertion, use a private builder with
 
 ```c3
 struct DelaunayBuilder {
-    int[] triangles;     // flat: 3 per face, vertex indices (into positions)
-    HeIndex[] halfedges; // flat: 3 per face, twin links
-    HeIndex[] hull_tri;  // hull vertex → adjacent half-edge
+    VertexIndex[] triangles;  // flat: 3 per face, vertex indices
+    HeIndex[] halfedges;      // flat: 3 per face, twin links (INVALID_HE = boundary)
+    HeIndex[] vertex_halfedges; // canonical outgoing half-edge per vertex
+    HeIndex[] hull_tri;       // hull vertex → adjacent half-edge
     VertexIndex[] hull_prev, hull_next; // linked list
-    VertexIndex[] hull_hash;            // spatial hash
-    usz face_count;      // current number of triangles
+    VertexIndex[] hull_hash;  // spatial hash
+    usz face_count;           // current number of triangles
 }
 ```
 
@@ -51,7 +52,9 @@ Build working positions from deduped points (unique_count). Allocate builder arr
 
 ### Phase 1 — Seed triangle
 
-Compute bbox center: `center = ((min+max)/2)`. Find closest point to center → `i0`. Find closest point to `i0` (excluding `i0`) → `i1`. Scan all remaining points: for each candidate, compute `circumradius(i0,i1,candidate)`. Select the one with smallest positive radius (skip collinear).
+Compute bbox center: `center = ((min+max)/2)`. Find closest point to center → `i0`. Find closest point to `i0` (excluding `i0`) → `i1`. Scan all remaining points: for each candidate, compute `circumradius_sq(i0,i1,candidate)` (private helper: compute squared circumradius from three points; reject collinear where `orient_2d == ZERO`). Select candidate with smallest positive radius.
+
+Private helper `circumradius_sq(a,b,c)`: compute circumcenter via `circumcenter_planar(a,b,c)`. If fault → return MAX (collinear, skip). Otherwise return squared distance from circumcenter to any vertex.
 
 Orient CCW: if `orient_2d(i0,i1,i2) <= 0`, swap i1,i2. Then `orient_2d(i0,i1,i2)` must be POSITIVE (non-degenerate).
 
@@ -86,31 +89,31 @@ If no such edge after a full traversal (back to start), `p` is inside or on the 
 **3b. Walk hull forward**:
 
 ```
-t = add_triangle(e, p, next[e], INVALID_HE, INVALID_HE, hull_tri[e]);
-hull_tri[p] = legalize(t + 2);   // legalize the new edge opposite p
-hull_tri[e] = t;                  // new edge on hull
+t = add_triangle(e, p, hull_next[e], INVALID_HE, INVALID_HE, hull_tri[e]);
+hull_tri[p] = legalize(t + 2);
+hull_tri[e] = t;
 
-next = next[e];
+curr = hull_next[e];
 while true:
-    q = next[next];
-    if orient_2d(positions[next], positions[q], positions[p]) >= 0: break;
-    t = add_triangle(next, p, q, hull_tri[p], INVALID_HE, hull_tri[next]);
+    q = hull_next[curr];
+    if orient_2d(positions[curr], positions[q], positions[p]) >= 0: break;
+    t = add_triangle(curr, p, q, hull_tri[p], INVALID_HE, hull_tri[curr]);
     hull_tri[p] = legalize(t + 2);
-    hull_tri[next] = t;
-    next = q;
+    hull_tri[curr] = t;
+    curr = q;
 ```
 
-**3c. Walk hull backward**:
+**3c. Walk hull backward:**
 
-If the initial visible edge search moved backward (counter-clockwise from hash hit), also walk backward:
+If the initial visible edge search returned `backwards = true` (the hash hit was behind the insertion point), also walk backward from the original start edge:
 
 ```
-prev = prev[e];
+prev = hull_prev[e];
 while true:
-    q = prev[prev];
+    q = hull_prev[prev];
     if orient_2d(positions[q], positions[prev], positions[p]) >= 0: break;
     t = add_triangle(q, p, prev, INVALID_HE, hull_tri[prev], hull_tri[q]);
-    legalize(t + 2);
+    legalize(t + 2, positions, builder);
     hull_tri[q] = t;
     prev = q;
 ```
@@ -129,11 +132,12 @@ Hash the new hull vertex `p` and the updated edges.
 ### Phase 4 — `add_triangle` (private to builder)
 
 ```c3
-fn usz add_triangle(VertexIndex i0, VertexIndex i1, VertexIndex i2,
-                     HeIndex twin0, HeIndex twin1, HeIndex twin2)
+fn HeIndex add_triangle(VertexIndex i0, VertexIndex i1, VertexIndex i2,
+                         HeIndex twin0, HeIndex twin1, HeIndex twin2,
+                         DelaunayBuilder* builder)
 ```
 
-Appends one triangle to builder's `triangles[]` and `halfedges[]`. Returns the index of the first new half-edge.
+Appends one triangle to builder arrays. Returns index of first new half-edge.
 
 ```
 t = face_count;
@@ -145,21 +149,25 @@ halfedges[3*t+1] = twin1;
 halfedges[3*t+2] = twin2;
 
 // Link twins.
-for (twin0, twin1, twin2): if twin != INVALID_HE: halfedges[twin] = 3*t + i
+if twin0 != INVALID_HE: halfedges[twin0] = 3*t;
+if twin1 != INVALID_HE: halfedges[twin1] = 3*t+1;
+if twin2 != INVALID_HE: halfedges[twin2] = 3*t+2;
 
 // Set vertex handles if unset.
-for (i0,i1,i2): if vertices[i].half_edge == INVALID_HE: vertices[i].half_edge = 3*t + i
+if vertex_halfedges[i0] == INVALID_HE: vertex_halfedges[i0] = 3*t;
+if vertex_halfedges[i1] == INVALID_HE: vertex_halfedges[i1] = 3*t+1;
+if vertex_halfedges[i2] == INVALID_HE: vertex_halfedges[i2] = 3*t+2;
 
 return 3*t;
 ```
 
-### Phase 5 — `legalize()` (stack-based)
+### Phase 5 — `legalize()` (stack-based, returns hull-facing half-edge)
 
 ```c3
-fn HeIndex legalize(HeIndex he)
+fn HeIndex legalize(HeIndex he, Vec3f[] positions, DelaunayBuilder* builder)
 ```
 
-Repeatedly checks and flips the edge identified by `he`. Uses an explicit stack (preallocated, max depth = face_count):
+Uses an explicit stack (preallocated at builder init). Returns the half-edge adjacent to a hull boundary after legalization (used by callers to update `hull_tri[]`).
 
 ```
 stack[0] = he;
@@ -169,53 +177,96 @@ while stack_size > 0:
     stack_size--;
     he = stack[stack_size];
     
-    a = halfedges[he];
-    if a == INVALID_HE: continue;           // boundary edge
+    a = halfedges[he];  // twin half-edge
+    if a == INVALID_HE: continue;  // boundary edge
     
-    // in_circle test: is opposite vertex inside circumcircle?
-    ar = prev_halfedge(he);
-    al = next_halfedge(he);
-    bl = prev_halfedge(a);
+    ar = prev_halfedge(he);   // edge before he in its triangle
+    al = next_halfedge(he);   // edge after he
+    bl = prev_halfedge(a);    // edge before twin
     
-    p0 = triangles[ar];  // origin of he (vertex on one side)
-    pr = triangles[he];  // origin of next (vertex at tip)
-    pl = triangles[al];  // origin of next's next
-    p1 = triangles[bl];  // opposite vertex across the edge
+    p0 = triangles[ar];  // origin of ar (vertex on he's side)
+    pr = triangles[he];  // origin of he (tip vertex)
+    pl = triangles[al];  // origin of al
+    p1 = triangles[bl];  // origin of bl (opposite vertex)
     
-    if in_circle_2d(positions[p1], positions[p0], positions[pr], positions[pl]) != PREDICATE_POSITIVE:
-        continue;                            // edge is Delaunay
+    // Convert Vec3f → Vec2f for predicate.
+    Vec2f v0 = { positions[p0].x, positions[p0].y };
+    Vec2f vr = { positions[pr].x, positions[pr].y };
+    Vec2f vl = { positions[pl].x, positions[pl].y };
+    Vec2f v1 = { positions[p1].x, positions[p1].y };
     
-    // Flip: swap the two triangles' third vertices.
+    // Lawson test: is p1 inside circumcircle of (p0, pr, pl)?
+    if geometry::in_circle_2d(v0, vr, vl, v1) != PREDICATE_POSITIVE: continue;
+    
+    // Flip: swap opposite vertices.
     triangles[he] = p1;
     triangles[a]  = p0;
     
-    // Reconnect half-edges.
+    // Save pre-flip hull state.
     hbl = halfedges[bl];
+    har = halfedges[ar];
+    
+    // Relink half-edges.
     link(he, hbl);
-    link(a, halfedges[ar]);
+    link(a, har);
     link(ar, bl);
     
     br = next_halfedge(a);
-    stack[stack_size] = br;   // push newly exposed edges
-    stack[stack_size+1] = bl;
+    
+    // Push newly exposed edges for re-check.
+    stack[stack_size] = he;    // continue checking this edge
+    stack[stack_size + 1] = br;
     stack_size += 2;
+    
+    // Hull handle update: if edge ar was on hull boundary, update hull_tri.
+    if har == INVALID_HE:
+        hull_tri[triangles[ar]] = ar;
+
+// Return the hull-adjacent half-edge.
+return he;
 ```
 
-Helper: `link(a, b)` sets `halfedges[a] = b` and `halfedges[b] = a` (if b ≠ INVALID_HE).
-
-Helper: `next_halfedge(i) = i % 3 == 2 ? i - 2 : i + 1`
-Helper: `prev_halfedge(i) = i % 3 == 0 ? i + 2 : i - 1`
-
-**Hull handle updates**: During legalization, if a flipped edge `he` or `a` is adjacent to the hull (its twin was INVALID_HE before the flip), the hull's `hull_tri[]` entry for the affected vertex must be updated. This is done by checking vertex origins: if `halfedges[next(he)].twin == INVALID_HE`, the vertex `triangles[next(he)]` is on the hull and its hull_tri entry should point to `next(he)`. Same for the other side.
+**Helpers**:
+- `next_halfedge(i)`: `i % 3 == 2 ? i - 2 : i + 1`
+- `prev_halfedge(i)`: `i % 3 == 0 ? i + 2 : i - 1`
+- `link(a, b)`: sets `halfedges[a] = b`. If `b != INVALID_HE`, also sets `halfedges[b] = a`. Precondition: `a != INVALID_HE`.
 
 ### Phase 6 — Mesh finalization
 
-After all insertions:
+After all insertions, populate `HalfEdgeMesh` from builder data:
 
-1. Collect surviving faces (skip any that reference super-triangle — none in delaunator, but check for completeness).
-2. Build `uint[]` index array from builder's `triangles[]`.
-3. Allocate `HalfEdgeMesh` arrays, populate `positions[]`, `vertices[]`, `faces[]`, `half_edges[]` from builder data.
-4. `mesh.validate()!` then return.
+```c3
+mesh.half_edges = alloc::new_array(alloc, HalfEdge, 3 * face_count);
+mesh.faces      = alloc::new_array(alloc, HalfEdgeFace, face_count);
+mesh.vertices   = alloc::new_array(alloc, HalfEdgeVertex, unique_count);
+mesh.positions  = alloc::new_array(alloc, Vec3f, unique_count);
+
+// Copy positions.
+for i in 0..unique_count: mesh.positions[i] = working_positions[i];
+
+// Populate half-edges.
+for i in 0..3*face_count:
+    mesh.half_edges[i].origin = triangles[i];
+    mesh.half_edges[i].twin   = halfedges[i];
+    mesh.half_edges[i].face   = (FaceIndex)(int)(i / 3);
+    // next = CCW successor: (i+1) within the same triangle, wrapping.
+    if i % 3 == 2: mesh.half_edges[i].next = (HeIndex)(int)(i - 2);
+    else:          mesh.half_edges[i].next = (HeIndex)(int)(i + 1);
+
+// Populate faces.
+for i in 0..face_count:
+    mesh.faces[i].half_edge = (HeIndex)(int)(3 * i);
+
+// Populate vertices.
+for i in 0..unique_count:
+    mesh.vertices[i].half_edge = vertex_halfedges[i];
+
+mesh.normals = {};
+mesh.uvs     = {};
+
+mesh.validate()!;
+return mesh;
+```
 
 ## Hull data structures (all in builder)
 
