@@ -204,15 +204,47 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
             }
         }
 
-        // Compact bad faces.
-        usz wpos = 0;
-        for (usz fi = 0; fi < face_count; fi++) {
-            if (faces[fi].alive) {
-                if (wpos != fi) faces[wpos] = faces[fi];
-                wpos++;
+        // Remove dead faces with incremental edge-map patching.
+        usz i = 0;
+        while (i < face_count) {
+            if (faces[i].alive) { i++; continue; }
+
+            // Remove this dead face's edges.
+            int dv0 = (int)faces[i].v0;
+            int dv1 = (int)faces[i].v1;
+            int dv2 = (int)faces[i].v2;
+            edge_map.remove({ dv0, dv1 });
+            edge_map.remove({ dv1, dv2 });
+            edge_map.remove({ dv2, dv0 });
+
+            face_count--;
+
+            // Remove any other dead faces at the end.
+            while (face_count > i && !faces[face_count].alive) {
+                int lv0 = (int)faces[face_count].v0;
+                int lv1 = (int)faces[face_count].v1;
+                int lv2 = (int)faces[face_count].v2;
+                edge_map.remove({ lv0, lv1 });
+                edge_map.remove({ lv1, lv2 });
+                edge_map.remove({ lv2, lv0 });
+                face_count--;
+            }
+
+            if (i < face_count) {
+                // Move last alive face into the dead slot, updating its edge indices.
+                faces[i] = faces[face_count];
+                int mv0 = (int)faces[i].v0;
+                int mv1 = (int)faces[i].v1;
+                int mv2 = (int)faces[i].v2;
+                edge_map.remove({ mv0, mv1 });
+                edge_map.remove({ mv1, mv2 });
+                edge_map.remove({ mv2, mv0 });
+                edge_map[{ mv0, mv1 }] = (int)i;
+                edge_map[{ mv1, mv2 }] = (int)i;
+                edge_map[{ mv2, mv0 }] = (int)i;
+                i++;
             }
         }
-        face_count = wpos;
 
         // Retriangulate: add new faces (u,v,p) for each boundary edge.
         for (usz bi = 0; bi < bnd_count; bi++) {
@@ -226,20 +258,6 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
             edge_map[ne1] = (int)face_count;
             edge_map[ne2] = (int)face_count;
             face_count++;
-        }
-
-        // Rebuild edge map for alive faces.
-        edge_map.clear();
-        for (usz fi = 0; fi < face_count; fi++) {
-            int v0 = (int)faces[fi].v0;
-            int v1 = (int)faces[fi].v1;
-            int v2 = (int)faces[fi].v2;
-            int[2] re0 = { v0, v1 };
-            int[2] re1 = { v1, v2 };
-            int[2] re2 = { v2, v0 };
-            edge_map[re0] = (int)fi;
-            edge_map[re1] = (int)fi;
-            edge_map[re2] = (int)fi;
         }
     }
 
