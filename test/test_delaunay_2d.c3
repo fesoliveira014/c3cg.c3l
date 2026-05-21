@@ -72,6 +72,16 @@ fn void test_delaunay_2d_duplicate_xy() @test
     assert(mesh.faces.len == 1);
 }
 
+fn void test_delaunay_2d_near_duplicate_is_not_output_vertex() @test
+{
+    Vec3f[4] pts = { { 0, 0, 0 }, { 2, 0, 0 }, { 0, 2, 0 }, { 0, 2.0000005f, 99 } };
+    HalfEdgeMesh mesh = delaunay::delaunay_2d(mem, pts[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+    assert(mesh.faces.len == 1);
+    assert(mesh.positions.len == 3);
+}
+
 fn void test_delaunay_2d_triangle() @test
 {
     Vec3f[3] pts = { { 0, 0, 0 }, { 2, 0, 0 }, { 0, 2, 0 } };

@@ -35,17 +35,29 @@ fn void link_halfedges(HeIndex[] halfedges, HeIndex a, HeIndex b)
 fn float pseudo_angle(float dx, float dy)
 {
     float denom = (dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy);
+    if (denom == 0.0f) { return 0.0f; }
     float p = dx / denom;
     if (dy > 0.0f) { return (3.0f - p) / 4.0f; }
     return (1.0f + p) / 4.0f;
 }
 
-struct DistCtx { float[] dists; }
+fn bool near_duplicate_xy(Vec3f a, Vec3f b)
+{
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    return dx * dx + dy * dy < DELAUNAY_NEAR_DUP_EPSILON;
+}
+
+struct DistCtx { float[] dists; Vec3f[] positions; }
 
 fn int compare_by_dist(int a, int b, DistCtx ctx)
 {
     if (ctx.dists[a] < ctx.dists[b]) { return -1; }
     if (ctx.dists[a] > ctx.dists[b]) { return 1; }
+    if (ctx.positions[a].x < ctx.positions[b].x) { return -1; }
+    if (ctx.positions[a].x > ctx.positions[b].x) { return 1; }
+    if (ctx.positions[a].y < ctx.positions[b].y) { return -1; }
+    if (ctx.positions[a].y > ctx.positions[b].y) { return 1; }
     return 0;
 }
 
@@ -59,7 +71,7 @@ fn float circumradius_sq(Vec3f a, Vec3f b, Vec3f c)
     return 1e30f;
 }
 
-fn int find_closest(Vec3f[] pts, usz count, Vec3f ref, int exclude)
+fn int find_closest(Vec3f[] pts, usz count, Vec3f ref, int exclude, bool skip_zero_distance = false)
 {
     int best = -1;
     float best_dist = 1e30f;
@@ -68,6 +80,7 @@ fn int find_closest(Vec3f[] pts, usz count, Vec3f ref, int exclude)
         float dx = pts[i].x - ref.x;
         float dy = pts[i].y - ref.y;
         float d2 = dx * dx + dy * dy;
+        if (skip_zero_distance && d2 < DELAUNAY_NEAR_DUP_EPSILON) { continue; }
         if (d2 < best_dist) { best = (int)i; best_dist = d2; }
     }
     return best;
@@ -155,80 +168,33 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
 {
     if (positions.len == 0) { return cg::EMPTY_INPUT~; }
 
-    // ── Phase 0: Dedup + validate ──
-    int[] indices = mem::alloc::new_array(alloc, int, (sz) positions.len);
-    defer free(indices);
-    for (usz i = 0; i < positions.len; i++) { indices[i] = (int)i; }
-
-    usz unique_count = 0;
-    for (usz i = 0; i < positions.len; i++) {
-        bool dup = false;
-        for (usz j = 0; j < unique_count; j++) {
-            int p = indices[j];
-            int c = indices[i];
-            if (positions[p].x == positions[c].x && positions[p].y == positions[c].y) {
-                dup = true;
-                break;
-            }
-        }
-        if (!dup) {
-            indices[unique_count] = indices[i];
-            unique_count++;
-        }
-    }
-    if (unique_count < 3) { return cg::DEGENERATE_INPUT~; }
-
-    int t0 = indices[0];
-    int t1 = -1;
-    for (usz i = 1; i < unique_count; i++) {
-        int p = indices[i];
-        if (positions[p].x != positions[t0].x || positions[p].y != positions[t0].y) {
-            t1 = p;
-            break;
-        }
-    }
-    if (t1 < 0) { return cg::DEGENERATE_INPUT~; }
-
-    int t2 = -1;
-    Vec2f d0 = { positions[t0].x, positions[t0].y };
-    Vec2f d1 = { positions[t1].x, positions[t1].y };
-    for (usz i = 0; i < unique_count; i++) {
-        int p = indices[i];
-        if (p == t0 || p == t1) { continue; }
-        Vec2f dp = { positions[p].x, positions[p].y };
-        if (geometry::orient_2d(d0, d1, dp) != geometry::PREDICATE_ZERO) {
-            t2 = p;
-            break;
-        }
-    }
-    if (t2 < 0) { return cg::DEGENERATE_INPUT~; }
+    // ── Phase 0: Validate options ──
+    usz point_count = positions.len;
+    if (point_count < 3) { return cg::DEGENERATE_INPUT~; }
 
     if (options.has_bounding_box) {
         if (options.bounding_box.min.x > options.bounding_box.max.x
             || options.bounding_box.min.y > options.bounding_box.max.y) {
             return cg::DEGENERATE_INPUT~;
         }
-        for (usz i = 0; i < unique_count; i++) {
-            int p = indices[i];
-            if (positions[p].x < options.bounding_box.min.x
-                || positions[p].x > options.bounding_box.max.x
-                || positions[p].y < options.bounding_box.min.y
-                || positions[p].y > options.bounding_box.max.y) {
+        for (usz i = 0; i < point_count; i++) {
+            if (positions[i].x < options.bounding_box.min.x
+                || positions[i].x > options.bounding_box.max.x
+                || positions[i].y < options.bounding_box.min.y
+                || positions[i].y > options.bounding_box.max.y) {
                 return cg::DEGENERATE_INPUT~;
             }
         }
     }
 
-    Vec3f[] work_pos = mem::alloc::new_array(alloc, Vec3f, (sz) unique_count);
-    defer free(work_pos);
-    for (usz i = 0; i < unique_count; i++) { work_pos[i] = positions[indices[i]]; }
+    Vec3f[] work_pos = positions;
 
     // ── Phase 1: Seed triangle + distance sort ──
     float min_x = work_pos[0].x;
     float max_x = work_pos[0].x;
     float min_y = work_pos[0].y;
     float max_y = work_pos[0].y;
-    for (usz i = 1; i < unique_count; i++) {
+    for (usz i = 1; i < point_count; i++) {
         if (work_pos[i].x < min_x) { min_x = work_pos[i].x; }
         if (work_pos[i].x > max_x) { max_x = work_pos[i].x; }
         if (work_pos[i].y < min_y) { min_y = work_pos[i].y; }
@@ -236,13 +202,15 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     }
     Vec3f center = { (min_x + max_x) * 0.5f, (min_y + max_y) * 0.5f, 0 };
 
-    int i0 = find_closest(work_pos, unique_count, center, -1);
-    int i1 = find_closest(work_pos, unique_count, work_pos[i0], i0);
+    int i0 = find_closest(work_pos, point_count, center, -1);
+    int i1 = find_closest(work_pos, point_count, work_pos[i0], i0, true);
+    if (i0 < 0 || i1 < 0) { return cg::DEGENERATE_INPUT~; }
 
     int i2 = -1;
     float min_radius = 1e30f;
-    for (usz i = 0; i < unique_count; i++) {
+    for (usz i = 0; i < point_count; i++) {
         if ((int)i == i0 || (int)i == i1) { continue; }
+        if (near_duplicate_xy(work_pos[i], work_pos[i0]) || near_duplicate_xy(work_pos[i], work_pos[i1])) { continue; }
         float r = circumradius_sq(work_pos[i0], work_pos[i1], work_pos[i]);
         if (r < min_radius) { i2 = (int)i; min_radius = r; }
     }
@@ -257,31 +225,33 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
 
     Vec3f seed_center = geometry::circumcenter_planar(work_pos[i0], work_pos[i1], work_pos[i2])!!;
 
-    for (usz i = 0; i < unique_count; i++) { indices[i] = (int)i; }
+    int[] indices = mem::alloc::new_array(alloc, int, (sz) point_count);
+    defer free(indices);
+    for (usz i = 0; i < point_count; i++) { indices[i] = (int)i; }
 
     // Precompute squared distances to seed center.
-    float[] dists = mem::alloc::new_array(alloc, float, (sz) unique_count);
+    float[] dists = mem::alloc::new_array(alloc, float, (sz) point_count);
     defer free(dists);
-    for (usz i = 0; i < unique_count; i++) {
+    for (usz i = 0; i < point_count; i++) {
         float dx = work_pos[i].x - seed_center.x;
         float dy = work_pos[i].y - seed_center.y;
         dists[i] = dx * dx + dy * dy;
     }
 
-    DistCtx dctx = { dists };
-    sort::quicksort(indices[0..(usz)(unique_count - 1)], &compare_by_dist, dctx);
+    DistCtx dctx = { dists, work_pos };
+    sort::quicksort(indices[0..(usz)(point_count - 1)], &compare_by_dist, dctx);
 
     // ── Phase 2: Allocate builder + init hull ──
-    usz max_triangles = 2 * unique_count;
-    usz hash_len = (usz)math::sqrt((double)unique_count);
+    usz max_triangles = 2 * point_count;
+    usz hash_len = (usz)math::sqrt((double)point_count);
     if (hash_len < 1) { hash_len = 1; }
 
     DelaunayBuilder builder;
     builder.triangles      = mem::alloc::new_array(alloc, VertexIndex, (sz)(3 * max_triangles));
     builder.halfedges      = mem::alloc::new_array(alloc, HeIndex, (sz)(3 * max_triangles));
-    builder.hull_tri       = mem::alloc::new_array(alloc, HeIndex, (sz) unique_count);
-    builder.hull_prev      = mem::alloc::new_array(alloc, VertexIndex, (sz) unique_count);
-    builder.hull_next      = mem::alloc::new_array(alloc, VertexIndex, (sz) unique_count);
+    builder.hull_tri       = mem::alloc::new_array(alloc, HeIndex, (sz) point_count);
+    builder.hull_prev      = mem::alloc::new_array(alloc, VertexIndex, (sz) point_count);
+    builder.hull_next      = mem::alloc::new_array(alloc, VertexIndex, (sz) point_count);
     builder.hull_hash      = mem::alloc::new_array(alloc, VertexIndex, (sz) hash_len);
     builder.legalize_stack = mem::alloc::new_array(alloc, HeIndex, (sz) max_triangles);
     builder.face_count = 0;
@@ -298,7 +268,7 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     builder.halfedges[2] = cg::INVALID_HE;
     builder.face_count = 1;
 
-    for (usz i = 0; i < unique_count; i++) {
+    for (usz i = 0; i < point_count; i++) {
         builder.hull_next[i] = cg::INVALID_VERTEX;
         builder.hull_prev[i] = cg::INVALID_VERTEX;
     }
@@ -328,15 +298,15 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     }
 
     // ── Phase 3: Point insertion ──
-    for (usz si = 0; si < unique_count; si++) {
+    for (usz si = 0; si < point_count; si++) {
         int p = indices[si];
-        if (p == i0 || p == i1 || p == i2) { continue; }
+        if (near_duplicate_xy(work_pos[(int)p], work_pos[i0])
+            || near_duplicate_xy(work_pos[(int)p], work_pos[i1])
+            || near_duplicate_xy(work_pos[(int)p], work_pos[i2])) { continue; }
 
         if (si > 0) {
             int prev_p = indices[si - 1];
-            float dx = work_pos[(int)p].x - work_pos[(int)prev_p].x;
-            float dy = work_pos[(int)p].y - work_pos[(int)prev_p].y;
-            if (dx * dx + dy * dy < DELAUNAY_NEAR_DUP_EPSILON) { continue; }
+            if (near_duplicate_xy(work_pos[(int)p], work_pos[(int)prev_p])) { continue; }
         }
 
         // find_visible_edge(p)
@@ -354,6 +324,11 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         VertexIndex e = start;
         VertexIndex q = builder.hull_next[(int)e];
         while (true) {
+            if (near_duplicate_xy(work_pos[(int)p], work_pos[(int)e])
+                || near_duplicate_xy(work_pos[(int)p], work_pos[(int)q])) {
+                e = cg::INVALID_VERTEX;
+                break;
+            }
             Vec2f ve = { work_pos[(int)e].x, work_pos[(int)e].y };
             Vec2f vq = { work_pos[(int)q].x, work_pos[(int)q].y };
             Vec2f vp = { work_pos[(int)p].x, work_pos[(int)p].y };
@@ -402,13 +377,34 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     }
 
     // ── Phase 6: Mesh finalization ──
+    int[] final_remap = mem::alloc::new_array(alloc, int, (sz)point_count);
+    defer free(final_remap);
+    for (usz i = 0; i < point_count; i++) { final_remap[i] = -1; }
+
+    usz final_vertex_count = 0;
+    for (usz i = 0; i < 3 * builder.face_count; i++) {
+        int old_v = (int)builder.triangles[i];
+        if (final_remap[old_v] < 0) {
+            final_remap[old_v] = (int)final_vertex_count;
+            final_vertex_count++;
+        }
+    }
+    if (final_vertex_count < 3) { return cg::DEGENERATE_INPUT~; }
+
+    Vec3f[] final_positions = mem::alloc::new_array(alloc, Vec3f, (sz)final_vertex_count);
+    defer free(final_positions);
+    for (usz i = 0; i < point_count; i++) {
+        int new_v = final_remap[i];
+        if (new_v >= 0) { final_positions[(usz)new_v] = work_pos[i]; }
+    }
+
     uint[] tri_indices = mem::alloc::new_array(alloc, uint, (sz)(3 * builder.face_count));
     defer free(tri_indices);
     for (usz i = 0; i < 3 * builder.face_count; i++) {
-        tri_indices[i] = (uint)builder.triangles[i];
+        tri_indices[i] = (uint)final_remap[(int)builder.triangles[i]];
     }
 
-    HalfEdgeMesh mesh = half_edge::from_triangles(alloc, work_pos, tri_indices)!;
+    HalfEdgeMesh mesh = half_edge::from_triangles(alloc, final_positions, tri_indices)!;
     defer catch mesh.destroy();
     mesh.validate()!;
     return mesh;
