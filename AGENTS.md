@@ -197,8 +197,8 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 | M5        | Geometry helpers (circumcenters, centroids, predicates)      | ✅ Complete |
 | M6        | Dual operation                                               | ✅ Complete |
 | M7        | Convex hull 2D (Andrew's monotone chain)                     | ✅ Complete |
-| M8        | Convex hull 3D (incremental)                                 | Not started |
-| M9        | Delaunay 2D (delaunator)                                      | ✅ Complete |
+| M8        | Convex hull 3D (incremental)                                 | ✅ Complete |
+| M9        | Delaunay 2D (delaunator)                                     | ✅ Complete |
 | M10       | Voronoi from Delaunay (unbounded)                            | Not started |
 | M11       | Bounded Voronoi (in_polygon, in_box)                         | Not started |
 | M12       | Spherical Delaunay + Voronoi                                 | Not started |
