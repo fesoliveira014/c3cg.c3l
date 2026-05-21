@@ -391,51 +391,62 @@ fn HeIndex add_triangle(DelaunayBuilder* b, VertexIndex i0, VertexIndex i1, Vert
 **Step 3: Add `legalize()` (matches spec Phase 5)**
 
 ```c3
-fn HeIndex legalize(HeIndex he, Vec3f[] positions, DelaunayBuilder* b)
+fn HeIndex legalize(HeIndex start_he, Vec3f[] positions, DelaunayBuilder* b)
 {
-    usz stack_size = 1;
-    b.legalize_stack[0] = he;
+    HeIndex ar = INVALID_HE;
+    usz stack_size = 0;
+    HeIndex he = start_he;
 
-    while (stack_size > 0) {
-        he = b.legalize_stack[--stack_size];
+    while (true) {
         HeIndex a = b.halfedges[he];
-        if (a == INVALID_HE) continue;
+        if (a != INVALID_HE) {
+            ar = prev_halfedge(he);
+            HeIndex al = next_halfedge(he);
+            HeIndex bl = prev_halfedge(a);
 
-        HeIndex ar = prev_halfedge(he);
-        HeIndex al = next_halfedge(he);
-        HeIndex bl = prev_halfedge(a);
+            VertexIndex p0 = b.triangles[ar];
+            VertexIndex pr = b.triangles[he];
+            VertexIndex pl = b.triangles[al];
+            VertexIndex p1 = b.triangles[bl];
 
-        VertexIndex p0 = b.triangles[ar];
-        VertexIndex pr = b.triangles[he];
-        VertexIndex pl = b.triangles[al];
-        VertexIndex p1 = b.triangles[bl];
+            Vec2f v0 = { positions[(int)p0].x, positions[(int)p0].y };
+            Vec2f vr = { positions[(int)pr].x, positions[(int)pr].y };
+            Vec2f vl = { positions[(int)pl].x, positions[(int)pl].y };
+            Vec2f v1 = { positions[(int)p1].x, positions[(int)p1].y };
 
-        Vec2f v0 = { positions[(int)p0].x, positions[(int)p0].y };
-        Vec2f vr = { positions[(int)pr].x, positions[(int)pr].y };
-        Vec2f vl = { positions[(int)pl].x, positions[(int)pl].y };
-        Vec2f v1 = { positions[(int)p1].x, positions[(int)p1].y };
+            if (geometry::in_circle_2d(v0, vr, vl, v1) == geometry::PREDICATE_NEGATIVE) {
+                b.triangles[he] = p1;
+                b.triangles[a]  = p0;
 
-        if (geometry::in_circle_2d(v0, vr, vl, v1) != geometry::PREDICATE_POSITIVE) continue;
+                HeIndex hbl = b.halfedges[bl];
+                HeIndex har = b.halfedges[ar];
 
-        b.triangles[he] = p1;
-        b.triangles[a]  = p0;
+                link_halfedges(b.halfedges, he, hbl);
+                link_halfedges(b.halfedges, a, har);
+                link_halfedges(b.halfedges, ar, bl);
 
-        HeIndex hbl = b.halfedges[bl];
-        HeIndex har = b.halfedges[ar];
+                HeIndex br = next_halfedge(a);
+                b.legalize_stack[stack_size++] = br;
 
-        link_halfedges(b.halfedges, he, hbl);
-        link_halfedges(b.halfedges, a, har);
-        link_halfedges(b.halfedges, ar, bl);
+                if (hbl == INVALID_HE) {
+                    for (usz hi = 0; hi < 3 * b.face_count; hi++) {
+                        if (b.hull_tri[(int)b.triangles[hi]] == bl) {
+                            b.hull_tri[(int)b.triangles[hi]] = he;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
-        HeIndex br = next_halfedge(a);
-        b.legalize_stack[stack_size++] = he;
-        b.legalize_stack[stack_size++] = br;
-
-        if (hbl == INVALID_HE) {
-            b.hull_tri[b.triangles[bl]] = he;
+        if (stack_size > 0) {
+            he = b.legalize_stack[--stack_size];
+        } else {
+            break;
         }
     }
-    return he;
+    return ar;
+}
 }
 ```
 
@@ -496,33 +507,28 @@ Replace the `return cg::DEGENERATE_INPUT~` stub with:
 ```c3
     HalfEdgeMesh mesh;
 
-    // Use unconditional defer free for scratch arrays that survive past faults.
-    // Builder arrays allocated in Task 2 must be freed unconditionally.
-
     mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, (sz)(3 * builder.face_count));
-    defer free(mesh.half_edges);
+    defer catch free(mesh.half_edges);
     mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, (sz) builder.face_count);
-    defer free(mesh.faces);
+    defer catch free(mesh.faces);
     mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, (sz) unique_count);
-    defer free(mesh.vertices);
+    defer catch free(mesh.vertices);
     mesh.positions = mem::alloc::new_array(alloc, Vec3f, (sz) unique_count);
-    defer free(mesh.positions);
+    defer catch free(mesh.positions);
 
-    // ... populate mesh from builder (see spec Phase 6) ...
+    // Populate mesh from builder (see spec Phase 6) ...
 
     mesh.validate()!;
 
-    // On success: defer free does NOT fire (no fault).
-    // Builder scratch arrays freed explicitly below.
-    free(builder.triangles); free(builder.halfedges); free(builder.hull_tri);
-    free(builder.hull_prev); free(builder.hull_next); free(builder.hull_hash);
-    free(builder.legalize_stack);
+    // On success: defer catch does NOT fire. Builder/scratch freed by their defer free.
+    // On validate fault: defer catch frees mesh arrays. defer free frees builder/scratch.
     return mesh;
 ```
 
-Note: `defer free()` (unconditional) fires on both success and fault exit. For mesh arrays, this is correct — if `validate()` faults, all allocated mesh arrays are freed. On success, they're caller-owned and NOT freed by defer free... wait, that's wrong.
-
-Correction: mesh arrays must use `defer catch free()` — if `validate()` faults, they're cleaned up. On success, the caller owns the mesh arrays. The builder scratch arrays use `defer free()` (unconditional) — they're always freed before return or on fault.
+**Memory pattern**:
+- Scratch + builder arrays: `defer free()` (unconditional — always cleaned up)
+- Mesh arrays: `defer catch free()` (only on fault — caller owns them on success)
+- No explicit `free()` calls — `defer` handles everything.
 
 ```c3
     // ── Phase 6: mesh finalization ──
@@ -575,7 +581,7 @@ Correction: mesh arrays must use `defer catch free()` — if `validate()` faults
 
 **Step 2: Run full v2 test suite**
 
-Copy the 12 existing tests to `test_delaunay_2d_v2.c3`, calling `v2::delaunay_2d_v2`. Build & test:
+In `test/test_delaunay_2d_v2.c3`, add copies of the existing Delaunay tests with `_v2` suffix on function names and calling `v2::delaunay_2d_v2`. This avoids name collisions with the original `module test` functions.
 
 ```bash
 c3c build debug && c3c test
