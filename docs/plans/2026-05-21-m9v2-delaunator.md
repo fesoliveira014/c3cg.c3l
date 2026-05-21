@@ -4,7 +4,7 @@
 
 **Goal:** Rewrite `src/delaunay/delaunay_2d.c3` with the delaunator algorithm. Same public API, same tests must pass.
 
-**Spec:** `docs/specs/2026-05-21-m9v2-delaunator-design.md` — this spec contains complete pseudocode for every phase. The implementer follows it directly. No v2 file, no intermediate stubs — replace the file and iterate until tests pass.
+**Spec:** `docs/specs/2026-05-21-m9v2-delaunator-design.md` — this spec contains complete pseudocode for every phase. The implementer follows it directly. **For memory ownership, this plan supersedes the spec**: scratch arrays use unconditional `defer free()`, mesh arrays use `defer catch free()`. No explicit `free()` calls.
 
 **Tech Stack:** C3 0.8.0, `cg`, `cg::geometry`, `cg::half_edge`, `std::sort`, `std::math`.
 
