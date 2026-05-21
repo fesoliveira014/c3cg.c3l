@@ -107,9 +107,12 @@ fn HalfEdgeMesh? delaunay_2d_v2(Allocator alloc, Vec3f[] positions, DelaunayOpti
 {
     if (positions.len == 0) return cg::EMPTY_INPUT~;
 
-    // Deduplicate exact (x,y).
+    // No defer catch here — explicit free before fault return.
+    // Use unconditional defer free for scratch arrays that survive past fault paths.
+
+    // Allocate scratch: unconditional defer free (always runs).
     int[] indices = mem::alloc::new_array(alloc, int, (sz) positions.len);
-    defer catch free(indices);
+    defer free(indices);
     for (usz i = 0; i < positions.len; i++) indices[i] = (int)i;
 
     usz unique_count = 0;
@@ -169,7 +172,7 @@ fn HalfEdgeMesh? delaunay_2d_v2(Allocator alloc, Vec3f[] positions, DelaunayOpti
 
     // Build working positions.
     Vec3f[] work_pos = mem::alloc::new_array(alloc, Vec3f, (sz) unique_count);
-    defer catch free(work_pos);
+    defer free(work_pos);
     for (usz i = 0; i < unique_count; i++) work_pos[i] = positions[indices[i]];
 
     // ── Phase 1: seed triangle ──
@@ -339,7 +342,9 @@ git commit -m "delaunay: add v2 skeleton with Phase 0-1 — dedup, seed triangle
     return cg::DEGENERATE_INPUT~;
 ```
 
-**Step 2: Build & test**
+Include `find_visible_edge`, forward walk, backward walk (if backwards), hull link update, hash update, marking removed vertices. See spec §Phase 3 for complete pseudocode.
+
+**Step 5: Build & test**
 
 ```bash
 c3c build debug && c3c test
@@ -356,14 +361,14 @@ git commit -m "delaunay: add v2 Phase 2 — builder allocation, hull initializat
 
 ---
 
-### Task 3: Phase 3 — find_visible_edge + forward walk + add_triangle (GREEN)
+### Task 3: Phases 3+5 — insertion loop + legalize (GREEN)
 
-**Objective:** Add `find_visible_edge` and forward walk logic. The function builds triangles for the first few insertions, then returns stub. Smoke test still passes (empty input).
+**Objective:** Implement `find_visible_edge`, `add_triangle`, `legalize`, forward/backward walk, hull link update — the full insertion loop. Removes the stub return. Now produces a valid Delaunay mesh in `DelaunayBuilder`, but still returns `DEGENERATE_INPUT~` (finalization is Task 4).
 
 **Files:**
 - Modify: `src/delaunay/delaunay_2d_v2.c3`
 
-**Step 1: Add `find_visible_edge` and `add_triangle` helpers**
+**Step 1: Add `add_triangle` and `find_visible_edge`**
 
 ```c3
 fn HeIndex add_triangle(DelaunayBuilder* b, VertexIndex i0, VertexIndex i1, VertexIndex i2,
@@ -383,55 +388,7 @@ fn HeIndex add_triangle(DelaunayBuilder* b, VertexIndex i0, VertexIndex i1, Vert
 }
 ```
 
-**Step 2: Add `find_visible_edge` + forward walk inside the insertion loop**
-
-After hull init, before free+return, insert the insertion loop:
-
-```c3
-    // ── Phase 3: point insertion (forward walk only for now) ──
-    for (usz si = 0; si < unique_count; si++) {
-        int p = indices[si];
-        if (p == i0 || p == i1 || p == i2) continue;
-
-        // find_visible_edge(p) — see spec for full implementation.
-        // Hash p to find starting hull vertex, advance CCW.
-        // Find edge e where orient_2d(work_pos[e], work_pos[next[e]], work_pos[p]) < 0.
-        // If none found (inside hull), skip.
-
-        // Forward walk + add_triangle — see spec.
-        // t = add_triangle(&builder, e, p, hull_next[e], INVALID_HE, INVALID_HE, hull_tri[e]);
-        // hull_tri[p] = legalize(t + 2, work_pos, &builder);
-        // Advance curr = hull_next[e], add triangles while orient_2d < 0.
-    }
-```
-
-The full Phase 3 implementation follows the spec's pseudocode for `find_visible_edge`, forward walk, backward walk (if backwards), hull link update, hash update, and marking removed vertices. See `docs/specs/2026-05-21-m9v2-delaunator-design.md` §Phase 3 for the complete code.
-
-**Step 3: Build & test**
-
-```bash
-c3c build debug && c3c test
-```
-
-Expected: 169 passed. Iterate until compiles and all tests pass.
-
-**Step 4: Commit**
-
-```bash
-git add src/delaunay/delaunay_2d_v2.c3
-git commit -m "delaunay: add v2 Phase 3 — find_visible_edge, forward walk, add_triangle"
-```
-
----
-
-### Task 4: Phase 5 — legalize + backward walk + hull update (GREEN)
-
-**Objective:** Implement `legalize()` and complete the insertion loop (backward walk, hull link update).
-
-**Files:**
-- Modify: `src/delaunay/delaunay_2d_v2.c3`
-
-**Step 1: Add `legalize()`**
+**Step 3: Add `legalize()` (matches spec Phase 5)**
 
 ```c3
 fn HeIndex legalize(HeIndex he, Vec3f[] positions, DelaunayBuilder* b)
@@ -482,9 +439,29 @@ fn HeIndex legalize(HeIndex he, Vec3f[] positions, DelaunayBuilder* b)
 }
 ```
 
-**Step 2: Complete the insertion loop**
+**Step 4: Add the full insertion loop**
 
-Add backward walk + hull link update + hash updates. See spec §Phase 3c-3d.
+After hull init, before free+return, insert the insertion loop:
+
+```c3
+    // ── Phase 3: point insertion (forward walk only for now) ──
+    for (usz si = 0; si < unique_count; si++) {
+        int p = indices[si];
+        if (p == i0 || p == i1 || p == i2) continue;
+
+        // find_visible_edge(p) — see spec for full implementation.
+        // Hash p to find starting hull vertex, advance CCW.
+        // Find edge e where orient_2d(work_pos[e], work_pos[next[e]], work_pos[p]) < 0.
+        // If none found (inside hull), skip.
+
+        // Forward walk + add_triangle — see spec.
+        // t = add_triangle(&builder, e, p, hull_next[e], INVALID_HE, INVALID_HE, hull_tri[e]);
+        // hull_tri[p] = legalize(t + 2, work_pos, &builder);
+        // Advance curr = hull_next[e], add triangles while orient_2d < 0.
+    }
+```
+
+The full Phase 3 implementation follows the spec's pseudocode for `find_visible_edge`, forward walk, backward walk (if backwards), hull link update, hash update, and marking removed vertices. See `docs/specs/2026-05-21-m9v2-delaunator-design.md` §Phase 3 for the complete code.
 
 **Step 3: Build & test**
 
@@ -494,16 +471,16 @@ c3c build debug && c3c test
 
 Expected: 169 passed.
 
-**Step 4: Commit**
+**Step 6: Commit**
 
 ```bash
 git add src/delaunay/delaunay_2d_v2.c3
-git commit -m "delaunay: add v2 legalize + backward walk + hull update"
+git commit -m "delaunay: add v2 insertion loop + legalize"
 ```
 
 ---
 
-### Task 5: Phase 6 — Mesh finalization + swap (GREEN)
+### Task 4: Phase 6 — Mesh finalization + swap (GREEN)
 
 **Objective:** Add mesh finalization. Run full test suite against v2. Swap into production file when all pass.
 
@@ -512,7 +489,40 @@ git commit -m "delaunay: add v2 legalize + backward walk + hull update"
 - Modify: `test/test_delaunay_2d.c3` (temporarily use v2)
 - Modify: `src/delaunay/delaunay_2d.c3` (final swap)
 
-**Step 1: Add Phase 6 finalization after the insertion loop**
+**Step 1: Add Phase 6 finalization**
+
+Replace the `return cg::DEGENERATE_INPUT~` stub with:
+
+```c3
+    HalfEdgeMesh mesh;
+
+    // Use unconditional defer free for scratch arrays that survive past faults.
+    // Builder arrays allocated in Task 2 must be freed unconditionally.
+
+    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, (sz)(3 * builder.face_count));
+    defer free(mesh.half_edges);
+    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, (sz) builder.face_count);
+    defer free(mesh.faces);
+    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, (sz) unique_count);
+    defer free(mesh.vertices);
+    mesh.positions = mem::alloc::new_array(alloc, Vec3f, (sz) unique_count);
+    defer free(mesh.positions);
+
+    // ... populate mesh from builder (see spec Phase 6) ...
+
+    mesh.validate()!;
+
+    // On success: defer free does NOT fire (no fault).
+    // Builder scratch arrays freed explicitly below.
+    free(builder.triangles); free(builder.halfedges); free(builder.hull_tri);
+    free(builder.hull_prev); free(builder.hull_next); free(builder.hull_hash);
+    free(builder.legalize_stack);
+    return mesh;
+```
+
+Note: `defer free()` (unconditional) fires on both success and fault exit. For mesh arrays, this is correct — if `validate()` faults, all allocated mesh arrays are freed. On success, they're caller-owned and NOT freed by defer free... wait, that's wrong.
+
+Correction: mesh arrays must use `defer catch free()` — if `validate()` faults, they're cleaned up. On success, the caller owns the mesh arrays. The builder scratch arrays use `defer free()` (unconditional) — they're always freed before return or on fault.
 
 ```c3
     // ── Phase 6: mesh finalization ──
@@ -563,19 +573,31 @@ git commit -m "delaunay: add v2 legalize + backward walk + hull update"
     return mesh;
 ```
 
-**Step 2: Create temporary test adapter**
+**Step 2: Run full v2 test suite**
 
-In `test/test_delaunay_2d_v2.c3`, add a full copy of the existing 12 tests but calling `v2::delaunay_2d_v2`. Run them:
+Copy the 12 existing tests to `test_delaunay_2d_v2.c3`, calling `v2::delaunay_2d_v2`. Build & test:
 
 ```bash
 c3c build debug && c3c test
 ```
 
-**Step 3: When all v2 tests pass, swap into production**
+Expected: all v2 tests pass.
 
-1. Copy `delaunay_2d_v2.c3` → `delaunay_2d.c3`, change `module cg::delaunay::v2;` to `module cg::delaunay;` and `delaunay_2d_v2` to `delaunay_2d`.
-2. Delete `delaunay_2d_v2.c3` and smoke test.
-3. Run full test suite.
+**Step 3: Swap into production**
+
+1. Delete `src/delaunay/delaunay_2d.c3` (the old implementation).
+2. Rename `src/delaunay/delaunay_2d_v2.c3` → `src/delaunay/delaunay_2d.c3`.
+3. In the renamed file: change `module cg::delaunay::v2;` → `module cg::delaunay;`, change `fn HalfEdgeMesh? delaunay_2d_v2` → `fn HalfEdgeMesh? delaunay_2d`.
+4. Update the test file: change `v2::delaunay_2d_v2` → `delaunay::delaunay_2d`.
+5. Delete `test/test_delaunay_2d_v2.c3`, restore the original `test/test_delaunay_2d.c3` (which already calls `delaunay::delaunay_2d`).
+
+Run full test suite:
+
+```bash
+c3c build debug && c3c test
+```
+
+Expected: 168 passed.
 
 **Step 4: Commit**
 
