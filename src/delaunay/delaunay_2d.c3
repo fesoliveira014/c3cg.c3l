@@ -129,8 +129,6 @@ fn HeIndex legalize(HeIndex start_he, Vec3f[] positions, DelaunayBuilder* b)
                 link_halfedges(b.halfedges, ar, bl);
 
                 HeIndex br = next_halfedge(a);
-                b.legalize_stack[stack_size] = he;
-                stack_size++;
                 b.legalize_stack[stack_size] = br;
                 stack_size++;
 
@@ -398,44 +396,14 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     }
 
     // ── Phase 6: Mesh finalization ──
-    HalfEdgeMesh mesh;
-    mesh.half_edges = mem::alloc::new_array(alloc, HalfEdge, (sz)(3 * builder.face_count));
-    defer catch free(mesh.half_edges);
-    mesh.faces = mem::alloc::new_array(alloc, HalfEdgeFace, (sz) builder.face_count);
-    defer catch free(mesh.faces);
-    mesh.vertices = mem::alloc::new_array(alloc, HalfEdgeVertex, (sz) unique_count);
-    defer catch free(mesh.vertices);
-    mesh.positions = mem::alloc::new_array(alloc, Vec3f, (sz) unique_count);
-    defer catch free(mesh.positions);
-
-    for (usz i = 0; i < unique_count; i++) { mesh.positions[i] = work_pos[i]; }
-
-    for (usz i = 0; i < unique_count; i++) { mesh.vertices[i].half_edge = cg::INVALID_HE; }
+    uint[] tri_indices = mem::alloc::new_array(alloc, uint, (sz)(3 * builder.face_count));
+    defer free(tri_indices);
     for (usz i = 0; i < 3 * builder.face_count; i++) {
-        VertexIndex v = builder.triangles[i];
-        if (mesh.vertices[(int)v].half_edge == cg::INVALID_HE) {
-            mesh.vertices[(int)v].half_edge = (HeIndex)(int)i;
-        }
+        tri_indices[i] = (uint)builder.triangles[i];
     }
 
-    for (usz i = 0; i < 3 * builder.face_count; i++) {
-        mesh.half_edges[i].origin = builder.triangles[i];
-        mesh.half_edges[i].twin   = builder.halfedges[i];
-        mesh.half_edges[i].face   = (FaceIndex)(int)(i / 3);
-        if (i % 3 == 2) {
-            mesh.half_edges[i].next = (HeIndex)(int)(i - 2);
-        } else {
-            mesh.half_edges[i].next = (HeIndex)(int)(i + 1);
-        }
-    }
-
-    for (usz i = 0; i < builder.face_count; i++) {
-        mesh.faces[i].half_edge = (HeIndex)(int)(3 * i);
-    }
-
-    mesh.normals = {};
-    mesh.uvs = {};
-
+    HalfEdgeMesh mesh = half_edge::from_triangles(alloc, work_pos, tri_indices)!;
+    defer catch mesh.destroy();
     mesh.validate()!;
     return mesh;
 }

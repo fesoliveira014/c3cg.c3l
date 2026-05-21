@@ -136,6 +136,39 @@ fn void test_delaunay_2d_grid() @test
     assert(mesh.faces.len >= 8);
 }
 
+fn void test_delaunay_2d_random_regression_n8() @test
+{
+    Vec3f[8] pts;
+    for (int i = 0; i < 8; i++) {
+        pts[i] = {
+            (float)((int)((uint)i * 2654435761u % 1000000u)) * 0.001f,
+            (float)((int)((uint)i * 1737350767u % 1000000u)) * 0.001f,
+            0,
+        };
+    }
+    HalfEdgeMesh mesh = delaunay::delaunay_2d(mem, pts[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+}
+
+fn void test_delaunay_2d_random_prefixes_validate() @test
+{
+    for (int n = 3; n <= 128; n++) {
+        Vec3f[] pts = mem::alloc::new_array(mem, Vec3f, (sz)n);
+        for (int i = 0; i < n; i++) {
+            pts[i] = {
+                (float)((int)((uint)i * 2654435761u % 1000000u)) * 0.001f,
+                (float)((int)((uint)i * 1737350767u % 1000000u)) * 0.001f,
+                0,
+            };
+        }
+        HalfEdgeMesh mesh = delaunay::delaunay_2d(mem, pts[..])!!;
+        mesh.validate()!!;
+        mesh.destroy();
+        free(pts);
+    }
+}
+
 fn void test_delaunay_2d_cocircular() @test
 {
     Vec3f[4] pts = { { 0, 0, 0 }, { 2, 0, 0 }, { 2, 2, 0 }, { 0, 2, 0 } };
