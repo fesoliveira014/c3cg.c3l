@@ -20,8 +20,6 @@ struct DelaunayBuilder {
     usz face_count;
 }
 
-struct DistSortCtx { Vec3f[] pts; Vec3f center; }
-
 fn HeIndex next_halfedge(HeIndex i) { return (i % 3 == 2) ? i - 2 : i + 1; }
 fn HeIndex prev_halfedge(HeIndex i) { return (i % 3 == 0) ? i + 2 : i - 1; }
 fn usz fast_mod(usz i, usz c) { return i >= c ? i % c : i; }
@@ -42,14 +40,12 @@ fn float pseudo_angle(float dx, float dy)
     return (1.0f + p) / 4.0f;
 }
 
-fn int compare_by_distance(int a, int b, DistSortCtx ctx)
+struct DistCtx { float[] dists; }
+
+fn int compare_by_dist(int a, int b, DistCtx ctx)
 {
-    float da = (ctx.pts[a].x - ctx.center.x) * (ctx.pts[a].x - ctx.center.x)
-             + (ctx.pts[a].y - ctx.center.y) * (ctx.pts[a].y - ctx.center.y);
-    float db = (ctx.pts[b].x - ctx.center.x) * (ctx.pts[b].x - ctx.center.x)
-             + (ctx.pts[b].y - ctx.center.y) * (ctx.pts[b].y - ctx.center.y);
-    if (da < db) { return -1; }
-    if (da > db) { return 1; }
+    if (ctx.dists[a] < ctx.dists[b]) { return -1; }
+    if (ctx.dists[a] > ctx.dists[b]) { return 1; }
     return 0;
 }
 
@@ -262,8 +258,18 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     Vec3f seed_center = geometry::circumcenter_planar(work_pos[i0], work_pos[i1], work_pos[i2])!!;
 
     for (usz i = 0; i < unique_count; i++) { indices[i] = (int)i; }
-    DistSortCtx dctx = { work_pos, seed_center };
-    sort::quicksort(indices[0..(usz)(unique_count - 1)], &compare_by_distance, dctx);
+
+    // Precompute squared distances to seed center.
+    float[] dists = mem::alloc::new_array(alloc, float, (sz) unique_count);
+    defer free(dists);
+    for (usz i = 0; i < unique_count; i++) {
+        float dx = work_pos[i].x - seed_center.x;
+        float dy = work_pos[i].y - seed_center.y;
+        dists[i] = dx * dx + dy * dy;
+    }
+
+    DistCtx dctx = { dists };
+    sort::quicksort(indices[0..(usz)(unique_count - 1)], &compare_by_dist, dctx);
 
     // ── Phase 2: Allocate builder + init hull ──
     usz max_triangles = 2 * unique_count;
