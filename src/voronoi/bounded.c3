@@ -4,6 +4,18 @@ import cg::geometry;
 import cg::half_edge;
 import cg::delaunay;
 import std::math;
+import std::sort;
+
+// ── Angle-sort helper for circumcenter ordering ──
+
+struct AngleCtx { float[] angles; }
+
+fn int cmp_angle(int a, int b, AngleCtx ctx)
+{
+    if (ctx.angles[a] < ctx.angles[b]) return -1;
+    if (ctx.angles[a] > ctx.angles[b]) return 1;
+    return 0;
+}
 
 // ── Private helpers ──
 
@@ -262,10 +274,232 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
         return result;
     }
 
-    // N >= 3 — placeholder
+
+    // ── N ≥ 3: helper-point Delaunay path ──
+
+    float min_x = polygon[0].x;
+    float max_x = min_x;
+    float min_y = polygon[0].y;
+    float max_y = min_y;
+    for (usz i = 1; i < polygon.len; i++) {
+        if (polygon[i].x < min_x) min_x = polygon[i].x;
+        if (polygon[i].x > max_x) max_x = polygon[i].x;
+        if (polygon[i].y < min_y) min_y = polygon[i].y;
+        if (polygon[i].y > max_y) max_y = polygon[i].y;
+    }
+    float w = max_x - min_x;
+    float h = max_y - min_y;
+    float margin_x = w * 2;
+    float margin_y = h * 2;
+    Vec3f[4] helpers = {
+        { min_x - margin_x, min_y - margin_y, 0 },
+        { max_x + margin_x, min_y - margin_y, 0 },
+        { max_x + margin_x, max_y + margin_y, 0 },
+        { min_x - margin_x, max_y + margin_y, 0 },
+    };
+
+    usz total = inside_count + 4;
+    Vec3f[] all_points = mem::alloc::new_array(alloc, Vec3f, (sz)total);
+    defer free(all_points);
+    for (usz i = 0; i < inside_count; i++) all_points[i] = inside_sites[i];
+    for (usz i = 0; i < 4; i++) all_points[inside_count + i] = helpers[i];
+
+    HalfEdgeMesh delaunay_mesh = delaunay::delaunay_2d(alloc, all_points)!;
+    defer delaunay_mesh.destroy();
+
+    Vec3f[] centers = geometry::circumcenters_planar(alloc, &delaunay_mesh)!;
+    defer free(centers);
+
+    // Match inside_sites to Delaunay vertex indices.
+    // delaunay_2d compacts vertex indices, so we match by position.
+    VertexIndex[] vertex_map = mem::alloc::new_array(alloc, VertexIndex, (sz)inside_count);
+    defer free(vertex_map);
+    for (usz i = 0; i < inside_count; i++) {
+        vertex_map[i] = cg::INVALID_VERTEX;
+        for (usz s = 0; s < delaunay_mesh.positions.len; s++) {
+            float dx = delaunay_mesh.positions[s].x - inside_sites[i].x;
+            float dy = delaunay_mesh.positions[s].y - inside_sites[i].y;
+            if (dx * dx + dy * dy < 1e-24f) {
+                vertex_map[i] = (VertexIndex)(int)s;
+                break;
+            }
+        }
+    }
+
+    // Collect incident triangle faces for each vertex by scanning all faces.
+    // This works even for boundary vertices where vertex_one_ring_faces stops early.
+    // We store faces per vertex in contiguous runs: all_face_lists[cell_start[i] .. cell_start[i+1]].
+    int[] cell_start = mem::alloc::new_array(alloc, int, (sz)(inside_count + 1));
+    defer free(cell_start);
+
+    // First pass: count faces per vertex
+    usz total_face_refs = 0;
+    for (usz i = 0; i < inside_count; i++) {
+        cell_start[i] = (int)total_face_refs;
+        if (vertex_map[i] == cg::INVALID_VERTEX) continue;
+        VertexIndex v = vertex_map[i];
+        for (usz f = 0; f < delaunay_mesh.faces.len; f++) {
+            HeIndex he = delaunay_mesh.faces[f].half_edge;
+            HeIndex cursor = he;
+            while (true) {
+                if (delaunay_mesh.half_edges[cursor].origin == v) {
+                    total_face_refs++;
+                    break;
+                }
+                cursor = delaunay_mesh.half_edges[cursor].next;
+                if (cursor == he) break;
+            }
+        }
+    }
+    cell_start[inside_count] = (int)total_face_refs;
+
+    FaceIndex[] all_face_lists = mem::alloc::new_array(alloc, FaceIndex, (sz)total_face_refs);
+    defer free(all_face_lists);
+
+    // Second pass: fill face lists
+    for (usz i = 0; i < inside_count; i++) {
+        if (vertex_map[i] == cg::INVALID_VERTEX) continue;
+        VertexIndex v = vertex_map[i];
+        usz cursor = (usz)cell_start[i];
+        for (usz f = 0; f < delaunay_mesh.faces.len; f++) {
+            HeIndex he = delaunay_mesh.faces[f].half_edge;
+            HeIndex c = he;
+            while (true) {
+                if (delaunay_mesh.half_edges[c].origin == v) {
+                    all_face_lists[cursor] = (FaceIndex)(int)f;
+                    cursor++;
+                    break;
+                }
+                c = delaunay_mesh.half_edges[c].next;
+                if (c == he) break;
+            }
+        }
+    }
+
+    // Scratch for angle-sorted indices
+    int[] sorted_indices = mem::alloc::new_array(alloc, int, (sz)3);
+    defer free(sorted_indices);
+
+    // Pass: build Voronoi cell for each vertex, sort circumcenters by angle, clip
+    usz n_surviving = 0;
+    usz total_verts = 0;
+    for (usz i = 0; i < inside_count; i++) {
+        if (vertex_map[i] == cg::INVALID_VERTEX) continue;
+        int start = cell_start[i];
+        int end = cell_start[i + 1];
+        int n_faces = end - start;
+        if (n_faces < 3) continue;
+
+        // Ensure sorted_indices is large enough
+        if ((usz)n_faces > sorted_indices.len) {
+            free(sorted_indices);
+            sorted_indices = mem::alloc::new_array(alloc, int, (sz)n_faces);
+        }
+
+        // Compute angles of circumcenters relative to site position
+        Vec3f vpos = inside_sites[i];
+        float[] angles = mem::alloc::new_array(alloc, float, (sz)n_faces);
+        defer free(angles);
+        for (int j = 0; j < n_faces; j++) {
+            sorted_indices[j] = j;
+            FaceIndex f = all_face_lists[start + j];
+            Vec3f cc = centers[(int)f];
+            float dx = cc.x - vpos.x;
+            float dy = cc.y - vpos.y;
+            angles[j] = (float)math::atan2((double)dy, (double)dx);
+        }
+
+        // Sort face positions (0..n_faces-1) by angle
+        AngleCtx actx = { angles };
+        sort::quicksort(sorted_indices[0..(usz)(n_faces - 1)], &cmp_angle, actx);
+
+        // Build polygon from sorted circumcenters
+        Vec3f[] face_poly = mem::alloc::new_array(alloc, Vec3f, (sz)n_faces);
+        for (int j = 0; j < n_faces; j++) {
+            int idx = sorted_indices[j];
+            FaceIndex f = all_face_lists[start + idx];
+            face_poly[j] = centers[(int)f];
+        }
+        Vec3f[] clipped = sutherland_hodgman(alloc, face_poly, polygon)!;
+        free(face_poly);
+        if (clipped.len >= 3) { n_surviving++; total_verts += clipped.len; }
+        free(clipped);
+    }
+
+    if (n_surviving == 0) {
+        VoronoiDiagram result;
+        result.mesh = {};
+        result.sites = {};
+        return result;
+    }
+
+    // Build output mesh from surviving Voronoi cells
+    Vec3f[] positions = mem::alloc::new_array(alloc, Vec3f, (sz)total_verts);
+    defer free(positions);
+    uint[] face_indices = mem::alloc::new_array(alloc, uint, (sz)total_verts);
+    defer free(face_indices);
+    uint[] face_offsets = mem::alloc::new_array(alloc, uint, (sz)(n_surviving + 1));
+    defer free(face_offsets);
+    Vec3f[] result_sites = mem::alloc::new_array(alloc, Vec3f, (sz)n_surviving);
+    defer catch free(result_sites);
+
+    usz pos_idx = 0;
+    usz cell = 0;
+    face_offsets[0] = 0;
+    for (usz i = 0; i < inside_count; i++) {
+        if (vertex_map[i] == cg::INVALID_VERTEX) continue;
+        int start = cell_start[i];
+        int end = cell_start[i + 1];
+        int n_faces = end - start;
+        if (n_faces < 3) continue;
+
+        if ((usz)n_faces > sorted_indices.len) {
+            free(sorted_indices);
+            sorted_indices = mem::alloc::new_array(alloc, int, (sz)n_faces);
+        }
+
+        Vec3f vpos = inside_sites[i];
+        float[] angles = mem::alloc::new_array(alloc, float, (sz)n_faces);
+        defer free(angles);
+        for (int j = 0; j < n_faces; j++) {
+            sorted_indices[j] = j;
+            FaceIndex f = all_face_lists[start + j];
+            float dx = centers[(int)f].x - vpos.x;
+            float dy = centers[(int)f].y - vpos.y;
+            angles[j] = (float)math::atan2((double)dy, (double)dx);
+        }
+        AngleCtx actx2 = { angles };
+        sort::quicksort(sorted_indices[0..(usz)(n_faces - 1)], &cmp_angle, actx2);
+
+        Vec3f[] face_poly = mem::alloc::new_array(alloc, Vec3f, (sz)n_faces);
+        for (int j = 0; j < n_faces; j++) {
+            int idx = sorted_indices[j];
+            FaceIndex f = all_face_lists[start + idx];
+            face_poly[j] = centers[(int)f];
+        }
+        Vec3f[] clipped = sutherland_hodgman(alloc, face_poly, polygon)!;
+        free(face_poly);
+        if (clipped.len >= 3) {
+            for (usz j = 0; j < clipped.len; j++) positions[pos_idx + j] = clipped[j];
+            for (usz j = 0; j < clipped.len; j++) face_indices[pos_idx + j] = (uint)(pos_idx + j);
+            pos_idx += clipped.len;
+            result_sites[cell] = inside_sites[i];
+            cell++;
+            face_offsets[cell] = (uint)pos_idx;
+        }
+        free(clipped);
+    }
+
+    HalfEdgeMesh mesh = half_edge::from_polygons(alloc, positions, face_offsets, face_indices)!;
+
+    Vec3f[] final_sites = mem::alloc::new_array(alloc, Vec3f, (sz)n_surviving);
+    defer catch { mesh.destroy(); free(final_sites); };
+    for (usz i = 0; i < n_surviving; i++) final_sites[i] = result_sites[i];
+    free(result_sites);
+
     VoronoiDiagram result;
-    result.mesh = {};
-    result.sites = {};
+    result.mesh = mesh;
+    result.sites = final_sites;
     return result;
 }
 
