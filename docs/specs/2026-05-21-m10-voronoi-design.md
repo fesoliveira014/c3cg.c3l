@@ -48,15 +48,16 @@ fn HalfEdgeMesh? to_delaunay(Allocator alloc, VoronoiDiagram* diagram);
 
 Converts a Delaunay triangulation to a Voronoi diagram.
 
-1. Validates `delaunay` (must be closed — no boundary edges). If any half-edge has `twin == INVALID_HE`, fault `OPEN_CELL_ON_BOUNDARY`.
-2. Computes circumcenters via `geometry::circumcenters_planar(alloc, delaunay)`.
-3. Computes dual mesh via `dual::dual(alloc, delaunay, centers)` using `DualMode.CIRCUMCENTER` (or the raw `dual_from_vertices` to avoid the mode enum). The dual mesh has one face per Delaunay vertex, with face vertices at the circumcenters of the Delaunay triangles incident to that vertex.
-4. Copies `delaunay.positions` → `sites` array (one site per Voronoi cell).
-5. Returns `VoronoiDiagram { mesh, sites }`.
+1. Pre-scans `delaunay.half_edges` for boundary edges (`twin == INVALID_HE`). If any found, fault `OPEN_CELL_ON_BOUNDARY`.
+2. Calls `mesh.validate()!` on the Delaunay mesh.
+3. Computes circumcenters via `geometry::circumcenters_planar(alloc, delaunay)!`. The centers array has length `delaunay.faces.len`.
+4. Computes dual mesh via `dual::dual_from_vertices(alloc, delaunay, centers)!`. Frees `centers` after the call (dual copies positions internally).
+5. Allocates `sites` by copying `delaunay.positions`. If allocation fails, `mesh.destroy()` fires via `defer catch`.
+6. Returns `VoronoiDiagram { mesh, sites }`.
 
 ### `to_delaunay`
 
-Recovers the Delaunay triangulation from a Voronoi diagram. Applies `dual::dual` with `diagram.sites` as dual vertex positions. Topologically equivalent to the original Delaunay mesh (modulo position values).
+Recovers the Delaunay triangulation from a Voronoi diagram. Applies `dual::dual_from_vertices(alloc, &diagram.mesh, diagram.sites)!`. Topologically equivalent to the original Delaunay mesh.
 
 ## Faults
 
@@ -70,15 +71,17 @@ No new `faultdef` needed — `OPEN_CELL_ON_BOUNDARY` already exists in `src/c3cg
 
 `VoronoiDiagram` owns both `mesh` and `sites`. Caller must call `diagram.destroy()`.
 
+Internal: `centers` is freed after `dual_from_vertices` returns (dual copies positions). `sites` is a fresh copy of `delaunay.positions`. On fault after `mesh` is built, `defer catch mesh.destroy()` cleans up.
+
 ## Tests
 
 File: `test/test_voronoi.c3` (or `test/test_voronoi_unbounded.c3`).
 
 | Test | Input | Expected |
 |------|-------|----------|
-| Closed mesh (icosahedron dual) | Icosahedron mesh | Produces valid Voronoi (dodecahedron), cell count = vertex count |
-| Boundary mesh faults | Single triangle (has boundary) | `OPEN_CELL_ON_BOUNDARY` |
-| Round-trip | `to_delaunay(from_delaunay(mesh))` | Topologically equivalent to original |
+| Closed mesh (icosahedron dual) | Icosahedron mesh | Cell count = vertex count; `sites.len == mesh.faces.len`; `mesh.positions.len == delaunay.faces.len`; `sites[i] == delaunay.positions[i]` |
+| Boundary mesh faults | Single triangle (has boundary) | `OPEN_CELL_ON_BOUNDARY` (not `DUAL_REQUIRES_CLOSED_MESH`) |
+| Round-trip | `to_delaunay(from_delaunay(mesh))` | Topologically equivalent (same vertex/face/half-edge counts) |
 
 ## Comparison to voronator-rs
 
