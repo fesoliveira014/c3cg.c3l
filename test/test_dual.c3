@@ -44,7 +44,7 @@ const uint[60] ICO_INDICES = {
     9, 8, 1,
 };
 
-fn void test_dual_open_mesh_returns_empty() @test
+fn void test_dual_closed_mesh_required() @test
 {
     Vec3f[3] tri_positions = {
         { 0, 0, 0 },
@@ -56,12 +56,11 @@ fn void test_dual_open_mesh_returns_empty() @test
     defer mesh.destroy();
 
     Vec3f[1] positions = { { 0, 0, 0 } };
-    HalfEdgeMesh dual_mesh = dual::dual_from_vertices(mem, &mesh, positions[..])!!;
-    defer dual_mesh.destroy();
-
-    // All 3 vertices are on boundary with 1 incident face each — all skipped.
-    assert(dual_mesh.faces.len == 0);
-    assert(dual_mesh.vertices.len == 0);
+    if (catch err = dual::dual_from_vertices(mem, &mesh, positions[..])) {
+        assert(err == cg::DUAL_REQUIRES_CLOSED_MESH);
+        return;
+    }
+    unreachable();
 }
 
 fn void test_dual_vertex_count_mismatch() @test

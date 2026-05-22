@@ -14,6 +14,12 @@ fn VoronoiDiagram? from_delaunay(Allocator alloc, HalfEdgeMesh* delaunay)
 {
     delaunay.validate()!;
 
+    for (usz i = 0; i < delaunay.half_edges.len; i++) {
+        if (delaunay.half_edges[i].twin == cg::INVALID_HE) {
+            return cg::OPEN_CELL_ON_BOUNDARY~;
+        }
+    }
+
     Vec3f[] centers = geometry::circumcenters_planar(alloc, delaunay)!;
     defer free(centers);
 

@@ -31,18 +31,18 @@ fn void test_voronoi_from_icosahedron() @test
     diagram.mesh.validate()!!;
 }
 
-fn void test_voronoi_planar_boundary() @test
+fn void test_voronoi_boundary_faults() @test
 {
     Vec3f[3] pts = { {0,0,0}, {1,0,0}, {0,1,0} };
     uint[3] idx = {0,1,2};
     HalfEdgeMesh mesh = half_edge::from_triangles(mem, pts[..], idx[..])!!;
     defer mesh.destroy();
 
-    // Planar Delaunay produces unbounded Voronoi — success.
-    // Single triangle: all vertices are boundary, dual skips them → 0 faces.
-    VoronoiDiagram diagram = voronoi::from_delaunay(mem, &mesh)!!;
-    defer diagram.destroy();
-    assert(diagram.mesh.faces.len == 0);
+    if (catch err = voronoi::from_delaunay(mem, &mesh)) {
+        assert(err == cg::OPEN_CELL_ON_BOUNDARY);
+        return;
+    }
+    unreachable();
 }
 
 fn void test_voronoi_roundtrip() @test
