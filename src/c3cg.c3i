@@ -189,3 +189,36 @@ struct DelaunayOptions {
 }
 
 fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions options = {});
+
+module cg::utils;
+import cg;
+import cg::utils::ppm;
+
+fn PpmImage? render_delaunay(Allocator alloc, HalfEdgeMesh* mesh, PpmOptions options);
+
+module cg::utils::ppm;
+import cg;
+
+struct PpmOptions {
+    uint width;
+    uint height;
+    uint edge_color;
+    uint site_color;
+    uint bg_color;
+    uint line_width;
+    uint dot_radius;
+    float margin;
+}
+
+struct PpmImage {
+    uint   width;
+    uint   height;
+    uint[] pixels;
+}
+
+fn void      PpmImage.destroy(&self);
+fn PpmImage? new_ppm(Allocator alloc, uint width, uint height);
+fn void      fill(PpmImage* img, uint color);
+fn void      draw_line(PpmImage* img, int x0, int y0, int x1, int y1, uint color, uint line_width = 1);
+fn void      draw_circle(PpmImage* img, int cx, int cy, uint radius, uint color, bool fill = true, uint line_width = 1);
+fn void      write_ppm(PpmImage* img, char[] path) ;
