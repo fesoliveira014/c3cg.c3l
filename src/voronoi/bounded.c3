@@ -147,3 +147,135 @@ fn bool is_convex_polygon(Vec3f[] polygon)
     }
     return has_strict;
 }
+
+// ── Public API ──
+
+fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
+{
+    if (!is_convex_polygon(polygon)) return cg::NON_CONVEX_BOUNDING_POLYGON~;
+    if (sites.len == 0) return cg::EMPTY_INPUT~;
+
+    Vec3f[] inside_sites = mem::alloc::new_array(alloc, Vec3f, (sz)sites.len);
+    defer free(inside_sites);
+    usz inside_count = 0;
+    for (usz i = 0; i < sites.len; i++) {
+        if (point_in_convex_polygon(sites[i], polygon)) {
+            inside_sites[inside_count] = sites[i];
+            inside_count++;
+        }
+    }
+
+    if (inside_count == 0) {
+        VoronoiDiagram result;
+        result.mesh = {};
+        result.sites = {};
+        return result;
+    }
+
+    if (inside_count == 1) {
+        Vec3f[] positions = mem::alloc::new_array(alloc, Vec3f, (sz)polygon.len);
+        defer free(positions);
+        for (usz i = 0; i < polygon.len; i++) positions[i] = polygon[i];
+
+        uint[] face_indices = mem::alloc::new_array(alloc, uint, (sz)polygon.len);
+        defer free(face_indices);
+        for (usz i = 0; i < polygon.len; i++) face_indices[i] = (uint)i;
+
+        uint[] face_offsets = mem::alloc::new_array(alloc, uint, 2);
+        defer free(face_offsets);
+        face_offsets[0] = 0;
+        face_offsets[1] = (uint)polygon.len;
+
+        HalfEdgeMesh mesh = half_edge::from_polygons(alloc, positions, face_offsets, face_indices)!;
+
+        Vec3f[] result_sites = mem::alloc::new_array(alloc, Vec3f, 1);
+        defer catch { mesh.destroy(); free(result_sites); };
+        result_sites[0] = inside_sites[0];
+
+        VoronoiDiagram result;
+        result.mesh = mesh;
+        result.sites = result_sites;
+        return result;
+    }
+
+    if (inside_count == 2) {
+        Vec3f[] poly0 = half_plane_clip(alloc, polygon, inside_sites[0], inside_sites[1], true)!;
+        defer free(poly0);
+        Vec3f[] poly1 = half_plane_clip(alloc, polygon, inside_sites[0], inside_sites[1], false)!;
+        defer free(poly1);
+
+        usz n_cells = 0;
+        if (poly0.len >= 3) n_cells++;
+        if (poly1.len >= 3) n_cells++;
+
+        if (n_cells == 0) {
+            VoronoiDiagram result;
+            result.mesh = {};
+            result.sites = {};
+            return result;
+        }
+
+        usz total_verts = 0;
+        if (poly0.len >= 3) total_verts += poly0.len;
+        if (poly1.len >= 3) total_verts += poly1.len;
+
+        Vec3f[] positions = mem::alloc::new_array(alloc, Vec3f, (sz)total_verts);
+        defer free(positions);
+        uint[] face_indices = mem::alloc::new_array(alloc, uint, (sz)total_verts);
+        defer free(face_indices);
+        uint[] face_offsets = mem::alloc::new_array(alloc, uint, (sz)(n_cells + 1));
+        defer free(face_offsets);
+
+        usz pos_idx = 0;
+        usz cell = 0;
+        face_offsets[0] = 0;
+        if (poly0.len >= 3) {
+            for (usz i = 0; i < poly0.len; i++) {
+                positions[pos_idx + i] = poly0[i];
+                face_indices[pos_idx + i] = (uint)(pos_idx + i);
+            }
+            pos_idx += poly0.len;
+            cell++;
+            face_offsets[cell] = (uint)pos_idx;
+        }
+        if (poly1.len >= 3) {
+            for (usz i = 0; i < poly1.len; i++) {
+                positions[pos_idx + i] = poly1[i];
+                face_indices[pos_idx + i] = (uint)(pos_idx + i);
+            }
+            pos_idx += poly1.len;
+            cell++;
+            face_offsets[cell] = (uint)pos_idx;
+        }
+
+        HalfEdgeMesh mesh = half_edge::from_polygons(alloc, positions, face_offsets, face_indices)!;
+
+        Vec3f[] result_sites = mem::alloc::new_array(alloc, Vec3f, (sz)n_cells);
+        defer catch { mesh.destroy(); free(result_sites); };
+        usz site_idx = 0;
+        if (poly0.len >= 3) { result_sites[site_idx] = inside_sites[0]; site_idx++; }
+        if (poly1.len >= 3) { result_sites[site_idx] = inside_sites[1]; }
+
+        VoronoiDiagram result;
+        result.mesh = mesh;
+        result.sites = result_sites;
+        return result;
+    }
+
+    // N >= 3 — placeholder
+    VoronoiDiagram result;
+    result.mesh = {};
+    result.sites = {};
+    return result;
+}
+
+fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox)
+{
+    Vec3f[4] polygon = {
+        { bbox.min.x, bbox.min.y, 0 },
+        { bbox.max.x, bbox.min.y, 0 },
+        { bbox.max.x, bbox.max.y, 0 },
+        { bbox.min.x, bbox.max.y, 0 },
+    };
+    return in_polygon(alloc, sites, polygon[..]);
+}
