@@ -26,6 +26,11 @@
       "type": "executable",
       "opt": "O3",
       "sources": ["src/**", "scripts/random_delaunay.c3"]
+    },
+    "random-voronoi": {
+      "type": "executable",
+      "opt": "O3",
+      "sources": ["src/**", "scripts/random_voronoi.c3"]
     }
   }
 }
