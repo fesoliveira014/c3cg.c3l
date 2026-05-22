@@ -75,19 +75,17 @@ fn PpmImage? render_delaunay(Allocator alloc, HalfEdgeMesh* mesh, PpmOptions opt
 6. For each vertex `v`:
    - Map vertex position to pixel.
    - `draw_circle(img, px, py, options.dot_radius, options.site_color, true, 1)`.
-7. `write_ppm(img, path)` (caller provides path).
-8. Return `PpmImage` (caller owns, must destroy).
+7. Return `PpmImage` (caller owns, must destroy). Caller optionally calls `write_ppm` to save.
 
 ### Coordinate mapping
 
 ```
-world_to_pixel(p, bbox, img_w, img_h):
+world_to_pixel(p, bbox, img_w, img_h, margin):
+    // margin must be < 0.5
     x_norm = (p.x - bbox.min.x) / (bbox.max.x - bbox.min.x)
     y_norm = (p.y - bbox.min.y) / (bbox.max.y - bbox.min.y)
-    // Apply margin
     x_norm = margin + x_norm * (1 - 2 * margin)
     y_norm = margin + y_norm * (1 - 2 * margin)
-    // Y-flip (image origin top-left, world Y goes up)
     px = (int)(x_norm * img_w)
     py = (int)((1.0 - y_norm) * img_h)
     clamp to [0, img_w-1] × [0, img_h-1]
