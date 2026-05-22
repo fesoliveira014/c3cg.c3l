@@ -136,3 +136,16 @@ File: `test/test_voronoi_bounded.c3`
 | 12 | Collinear polygon | `NON_CONVEX_BOUNDING_POLYGON` |
 | 13 | Empty sites | `EMPTY_INPUT` |
 | 14 | `in_box` with 2 sites | 2 bounded cells |
+
+### Empty-return semantics
+
+When no cells survive (N=0 after prefilter, or all cells clipped outside), return a valid `VoronoiDiagram` with zero-length arrays:
+
+```c3
+VoronoiDiagram result;
+result.mesh = {};   // empty arrays, 0 faces
+result.sites = {};
+return result;
+```
+
+This avoids `from_polygons`'s `EMPTY_INPUT` fault and keeps the return type uniform. Callers check `diagram.mesh.faces.len == 0`.
