@@ -10,9 +10,9 @@ New file `src/voronoi/bounded.c3` — part of `module cg::voronoi;`.
 
 ## Prerequisite changes (from M10)
 
-- Remove boundary check from `dual_from_vertices` (line 17: `twin == INVALID_HE` → `DUAL_REQUIRES_CLOSED_MESH`). The dual of a boundary vertex produces an incomplete face ring — this is valid unbounded Voronoi. With helper points, original sites are interior so their rings are complete.
-- Remove boundary check from `from_delaunay` (line 18: `twin == INVALID_HE` → `OPEN_CELL_ON_BOUNDARY`). Planar Delaunay naturally has boundary edges; unbounded Voronoi is valid output.
-- Update M10 test `test_voronoi_boundary_faults`: change from "faults OPEN_CELL_ON_BOUNDARY" to "succeeds, mesh has boundary half-edges."
+- Remove boundary check from `dual_from_vertices` (line 17: `twin == INVALID_HE` → `DUAL_REQUIRES_CLOSED_MESH`). The dual of a boundary vertex may produce a face ring with < 3 vertices — callers must handle or discard those faces. With helper points in M11, original sites are strictly interior (≥ 3 incident Delaunay triangles) so their face rings are always complete.
+- Remove boundary check from `from_delaunay` (line 18: `twin == INVALID_HE` → `OPEN_CELL_ON_BOUNDARY`). Planar Delaunay naturally has boundary edges; unbounded Voronoi is valid output. Boundary-vertex dual faces may be degenerate — callers should validate if needed.
+- Update M10 test `test_voronoi_boundary_faults`: change from "faults OPEN_CELL_ON_BOUNDARY" to "succeeds, interior vertices produce valid faces."
 
 ## Public API
 
@@ -33,7 +33,7 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 ### `in_polygon`
 
 1. Validate `polygon.len >= 3` — else `NON_CONVEX_BOUNDING_POLYGON`.
-2. Validate `polygon` is convex + CCW: for each consecutive triple `(p, q, r)`, `orient_2d({p.x, p.y}, {q.x, q.y}, {r.x, r.y}) >= 0`. If any triple fails → `NON_CONVEX_BOUNDING_POLYGON`.
+2. Validate `polygon` is convex + CCW + non-degenerate: for each consecutive triple `(p, q, r)`, `orient_2d({p.x, p.y}, {q.x, q.y}, {r.x, r.y}) >= 0`. Additionally, require at least one triple with `> 0` (strictly positive turn) to reject collinear/degenerate polygons. Also require `polygon` bbox extents > 0 (nonzero area). Failure → `NON_CONVEX_BOUNDING_POLYGON`.
 3. Validate `sites.len >= 1` — else `EMPTY_INPUT`.
 
 4. Compute polygon bbox, add 4 helper points ~2× polygon extent away:
@@ -50,9 +50,9 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 
 5. `all_points = alloc.concat(sites, helpers)`.
 6. `delaunay_mesh = delaunay::delaunay_2d(alloc, all_points)!`; `defer free(all_points)`.
-7. `defer catch delaunay_mesh.destroy()`.
+7. `defer delaunay_mesh.destroy()` (destroyed on both success and fault paths).
 8. `voronoi_diagram = voronoi::from_delaunay(alloc, &delaunay_mesh)!` (no boundary fault).
-9. `defer catch voronoi_diagram.destroy()`.
+9. `defer voronoi_diagram.destroy()`.
 
 10. **Match Voronoi faces to original sites**: build a position→VertexIndex lookup by comparing each original `sites[i]` against `delaunay_mesh.positions` (linear scan is fine — N and V are bounded for 2D diagrams). The matched vertex index IS the Voronoi face index (because `from_delaunay` copies Delaunay positions to Voronoi sites, and each site becomes exactly one Voronoi face).
 
@@ -60,8 +60,10 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
     a. Walk face via `voronoi_diagram.mesh.face_vertices(f, out[])`.
     b. Collect positions from `voronoi_diagram.mesh.positions[out[..]]`.
     c. S-H clip against the bounding polygon.
-    d. If clipped has < 3 vertices → face is outside, drop it.
+    d. If clipped has < 3 vertices → face is outside the polygon, drop it (cell falls entirely outside).
     e. Otherwise accumulate positions for `from_polygons` and record the site.
+
+Sites outside the polygon produce cells that cover most of the plane. After S-H clipping, these cells reduce to nothing — they are naturally dropped. No explicit inside/outside prefiltering is needed; the clip handles it for all N ≥ 3.
 
 12. If no surviving cells → construct empty result:
     ```c3
@@ -123,7 +125,7 @@ Before `from_polygons`, deduplicate accumulated positions (within `1e-12`). Buil
 | `EMPTY_INPUT` | `sites.len == 0` (existing) |
 | `NON_CONVEX_BOUNDING_POLYGON` | `polygon` not convex or not CCW (new) |
 
-New faultdef in `src/c3cg.c3i`:
+New faultdef in `src/c3cg.c3i`, in the root `module cg;` fault block (alongside `EMPTY_INPUT`, `INDEX_OUT_OF_RANGE`, etc.):
 
 ```c3
 faultdef NON_CONVEX_BOUNDING_POLYGON;
