@@ -10,8 +10,8 @@ New file `src/voronoi/bounded.c3` — part of `module cg::voronoi;`.
 
 ## Prerequisite changes (from M10)
 
-- Remove boundary check from `dual_from_vertices` (line 17: `twin == INVALID_HE` → `DUAL_REQUIRES_CLOSED_MESH`). The dual of a boundary vertex may produce a face ring with < 3 vertices — callers must handle or discard those faces. With helper points in M11, original sites are interior so their rings are always complete (≥ 3 vertices).
-- Remove boundary check from `from_delaunay` (line 18: `twin == INVALID_HE` → `OPEN_CELL_ON_BOUNDARY`). Planar Delaunay naturally has boundary edges; unbounded Voronoi is valid output.
+- Remove boundary check from `dual_from_vertices` (line 17: `twin == INVALID_HE` → `DUAL_REQUIRES_CLOSED_MESH`). Also skip boundary vertices with incomplete face rings (< 3 faces) instead of faulting — those vertices produce no face in the dual output (the face_offsets advance by 0 for that vertex index). This is required because helper points may be hull vertices with incomplete rings.
+- Remove boundary check from `from_delaunay` (line 18: `twin == INVALID_HE` → `OPEN_CELL_ON_BOUNDARY`). Planar Delaunay naturally has boundary edges; unbounded Voronoi is valid output. M11 uses `from_delaunay` directly — helper-point vertices with incomplete rings are skipped by the dual, original-site vertices are interior and complete.
 - Update M10 test `test_voronoi_boundary_faults`: change from "faults OPEN_CELL_ON_BOUNDARY" to "succeeds, interior vertices produce valid faces."
 
 ## Public API
@@ -36,13 +36,13 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 2. Validate `polygon` convex + CCW + non-degenerate: for each consecutive triple (p, q, r), `orient_2d({p.x, p.y}, {q.x, q.y}, {r.x, r.y}) >= 0`. Require at least one triple > 0 and bbox extents > 0. Failure → `NON_CONVEX_BOUNDING_POLYGON`.
 3. Validate `sites.len >= 1` — else `EMPTY_INPUT`.
 
-4. **Prefilter sites**: test each site against polygon (point-in-convex-polygon: `orient_2d` against each edge — site left-of-or-on all edges). Keep only inside/on sites. If 0 survive → return empty `VoronoiDiagram`.
+4. **Prefilter sites**: test each site against polygon (point-in-convex-polygon: `orient_2d` against each edge — site left-of-or-on all edges). Keep only inside/on sites in `inside_sites` (newly allocated). If 0 survive → return empty `VoronoiDiagram`.
 
-5. **Branch on surviving count N**:
+5. **Branch on surviving count N** (`inside_sites.len`):
    - **N = 0**: return empty (mesh = {}, sites = {}).
-   - **N = 1**: cell = polygon. Build via `from_polygons` → `VoronoiDiagram { mesh, [site] }`.
-   - **N = 2**: perpendicular bisector, clip polygon via half-plane S-H for each site → two cells.
-   - **N ≥ 3**: helper-point Delaunay path below.
+   - **N = 1**: cell = polygon. Build via `from_polygons` with one face. Allocate 1-element `sites` array, copy the site. Return `VoronoiDiagram { mesh, sites }`.
+   - **N = 2**: perpendicular bisector of the two sites (see N=2 section). Clip polygon via half-plane S-H for each site → two cells. Allocate 2-element `sites` array. Return.
+   - **N ≥ 3**: helper-point Delaunay path below. `inside_sites` is freed after use (replaced by the returned diagram's sites).
 
 #### N ≥ 3 helper-point path
 
@@ -71,7 +71,7 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 10. `voronoi_diagram = voronoi::from_delaunay(alloc, &delaunay_mesh)!`.
 11. `defer voronoi_diagram.destroy()` (unconditional — temporary).
 
-12. **Match faces to sites**: compare each `sites[i]` against `voronoi_diagram.sites[]` (position equality within 1e-12). Each site maps to one Voronoi face index.
+12. **Match faces to inside_sites**: compare each `inside_sites[i]` against `voronoi_diagram.sites[]` (position equality within 1e-12). Each site maps to one Voronoi face index.
 
 13. Per matched face:
     a. `face_vertices(f, out[])`. < 3 vertices → skip (won't happen for interior sites).
@@ -81,11 +81,17 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
     e. Accumulate positions + indices for `from_polygons`.
 
 14. If no surviving cells → empty result.
-15. Otherwise: `from_polygons(alloc, positions, offsets, indices)` → `VoronoiDiagram { mesh, sites }`.
+15. Otherwise: `from_polygons(alloc, positions, offsets, indices)` → allocate sites array for surviving cells only, copy from `inside_sites`. Return `VoronoiDiagram { mesh, sites }`.
 
 ### N=2 half-plane clip
 
-Perpendicular bisector of sites a, b. For a point p: `orient_2d({a.x,a.y}, {b.x,b.y}, {p.x,p.y})`. p is in a's half-plane when its sign matches an extra test point on a's side. Single-edge S-H against the bisector line.
+Sites `a`, `b`. Midpoint `m = (a + b) / 2`. Direction `d = b - a`.
+
+A point `p` is on site `a`'s side of the perpendicular bisector when `dot(p - m, d) <= 0`.
+
+Clipping edge: the bisector line through `m` with direction `perp = {-d.y, d.x, 0}`. For S-H, use two far-apart points on that line as the single clip edge. `p` is "inside" when the dot-product above matches the expected sign for the target site.
+
+Output two cells, each clipped to one half of the bounding polygon. Allocate 2-element sites array with copies of both sites.
 
 ### Sutherland-Hodgman
 
