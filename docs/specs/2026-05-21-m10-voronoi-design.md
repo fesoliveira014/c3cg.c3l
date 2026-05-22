@@ -61,8 +61,8 @@ Recovers the Delaunay triangulation from a Voronoi diagram. Applies `dual::dual_
 
 ## Faults
 
-| Fault | When |
-|-------|------|
+| Fault                   | When                                                       |
+| ----------------------- | ---------------------------------------------------------- |
 | `OPEN_CELL_ON_BOUNDARY` | Delaunay mesh has boundary edges (unbounded Voronoi cells) |
 
 No new `faultdef` needed — `OPEN_CELL_ON_BOUNDARY` already exists in `src/c3cg.c3i`.
@@ -77,17 +77,17 @@ Internal: `centers` is freed after `dual_from_vertices` returns (dual copies pos
 
 File: `test/test_voronoi.c3` (or `test/test_voronoi_unbounded.c3`).
 
-| Test | Input | Expected |
-|------|-------|----------|
-| Closed mesh (icosahedron dual) | Icosahedron mesh | Cell count = vertex count; `sites.len == mesh.faces.len`; `mesh.positions.len == delaunay.faces.len`; `sites[i] == delaunay.positions[i]` |
-| Boundary mesh faults | Single triangle (has boundary) | `OPEN_CELL_ON_BOUNDARY` (not `DUAL_REQUIRES_CLOSED_MESH`) |
-| Round-trip | `to_delaunay(from_delaunay(mesh))` | Topologically equivalent (same vertex/face/half-edge counts) |
+| Test                           | Input                              | Expected                                                                                                                                  |
+| ------------------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Closed mesh (icosahedron dual) | Icosahedron mesh                   | Cell count = vertex count; `sites.len == mesh.faces.len`; `mesh.positions.len == delaunay.faces.len`; `sites[i] == delaunay.positions[i]` |
+| Boundary mesh faults           | Single triangle (has boundary)     | `OPEN_CELL_ON_BOUNDARY` (not `DUAL_REQUIRES_CLOSED_MESH`)                                                                                 |
+| Round-trip                     | `to_delaunay(from_delaunay(mesh))` | Topologically equivalent (same vertex/face/half-edge counts)                                                                              |
 
 ## Comparison to voronator-rs
 
-| | c3cg | voronator-rs |
-|---|---|---|
-| Algorithm | `dual::dual` (structured) | Manual half-edge walk per vertex |
-| Output | `HalfEdgeMesh` (general) | `Vec<Vec<Point>>` per cell |
-| Clipping | None in M10 (M11 adds) | Built-in via Sutherland-Hodgman |
-| Sites | Parallel array indexed by FaceIndex | Inline with cell data |
+|           | c3cg                                | voronator-rs                     |
+| --------- | ----------------------------------- | -------------------------------- |
+| Algorithm | `dual::dual` (structured)           | Manual half-edge walk per vertex |
+| Output    | `HalfEdgeMesh` (general)            | `Vec<Vec<Point>>` per cell       |
+| Clipping  | None in M10 (M11 adds)              | Built-in via Sutherland-Hodgman  |
+| Sites     | Parallel array indexed by FaceIndex | Inline with cell data            |

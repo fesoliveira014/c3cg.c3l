@@ -47,6 +47,7 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 #### N ≥ 3 helper-point path
 
 6. Compute polygon bbox, add 4 helper points ~2× extent away:
+
    ```
    w = max.x - min.x;  h = max.y - min.y
    helpers = [
@@ -56,9 +57,11 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
      {min.x + w/2,   max.y + h  }
    ]
    ```
+
    Helper points extend the Delaunay beyond the polygon so boundary sites produce complete Voronoi cells (≥ 3 circumcenter vertices).
 
 7. Consolidated point array:
+
    ```c3
    usz total = sites.len + (usz)4;
    Vec3f[] all_points = mem::alloc::new_array(alloc, Vec3f, (sz)total);
@@ -116,10 +119,10 @@ Before `from_polygons`, deduplicate positions (within 1e-12), remap face indices
 
 ## Faults
 
-| Fault | When |
-|-------|------|
-| `EMPTY_INPUT` | `sites.len == 0` (existing in root `module cg;`) |
-| `NON_CONVEX_BOUNDING_POLYGON` | polygon not convex/CCW/degenerate (new) |
+| Fault                         | When                                             |
+| ----------------------------- | ------------------------------------------------ |
+| `EMPTY_INPUT`                 | `sites.len == 0` (existing in root `module cg;`) |
+| `NON_CONVEX_BOUNDING_POLYGON` | polygon not convex/CCW/degenerate (new)          |
 
 Add to root fault block in `src/c3cg.c3i`:
 
@@ -138,32 +141,32 @@ faultdef NON_CONVEX_BOUNDING_POLYGON;
 
 File: `test/test_voronoi_bounded.c3`
 
-| # | Test | Input | Expected |
-|---|------|-------|----------|
-| 1 | 4 sites in unit square | `[(0.25,0.25), (0.75,0.25), (0.75,0.75), (0.25,0.75)]`, unit square | 4 cells, all bounded, vertices inside/on square |
-| 2 | N=1 inside | `[(0.5, 0.5)]`, unit square | 1 cell = unit square |
-| 3 | N=1 outside | `[(-1, 0.5)]`, unit square | Empty (prefiltered) |
-| 4 | N=2 both inside | `[(0.25,0.5), (0.75,0.5)]`, unit square | 2 cells split by vertical bisector |
-| 5 | N=2 one outside | `[(0.5,0.5), (-1,0.5)]`, unit square | 1 cell (inside site gets polygon) |
-| 6 | N=2 both outside | `[(-1,0.5), (-2,0.5)]`, unit square | Empty |
-| 7 | Site near corner | `[(0.01, 0.01)]`, unit square | 1 cell clipped correctly |
-| 8 | 3 sites in square | `[(0.1,0.1), (0.5,0.9), (0.9,0.1)]`, unit square | 3 cells, all bounded |
-| 9 | Diamond polygon | 5 sites in diamond `[(1,0), (0,1), (-1,0), (0,-1)]` | 5 cells clipped |
-| 10 | Triangle polygon | 3 sites in triangle `[(0,0), (2,0), (1,2)]` | 3 cells bounded |
-| 11 | All sites outside | `[(-1,-1), (-1,2), (2,-1), (2,2)]`, unit square | Empty (prefiltered) |
-| 12 | 100 random sites | `[0,10]²` box | All clipped, no crash |
-| 13 | Non-convex polygon | L-shaped 6-vertex | `NON_CONVEX_BOUNDING_POLYGON` |
-| 14 | Clockwise polygon | Unit square CW | `NON_CONVEX_BOUNDING_POLYGON` |
-| 15 | <3 verts | 2-vertex polygon | `NON_CONVEX_BOUNDING_POLYGON` |
-| 16 | Collinear polygon | 4 collinear vertices | `NON_CONVEX_BOUNDING_POLYGON` |
-| 17 | Empty sites | `sites = []` | `EMPTY_INPUT` |
-| 18 | `in_box` basic | 2 sites in `Aabb{0,0,2,2}` | Bounded cells |
+| #   | Test                   | Input                                                               | Expected                                        |
+| --- | ---------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| 1   | 4 sites in unit square | `[(0.25,0.25), (0.75,0.25), (0.75,0.75), (0.25,0.75)]`, unit square | 4 cells, all bounded, vertices inside/on square |
+| 2   | N=1 inside             | `[(0.5, 0.5)]`, unit square                                         | 1 cell = unit square                            |
+| 3   | N=1 outside            | `[(-1, 0.5)]`, unit square                                          | Empty (prefiltered)                             |
+| 4   | N=2 both inside        | `[(0.25,0.5), (0.75,0.5)]`, unit square                             | 2 cells split by vertical bisector              |
+| 5   | N=2 one outside        | `[(0.5,0.5), (-1,0.5)]`, unit square                                | 1 cell (inside site gets polygon)               |
+| 6   | N=2 both outside       | `[(-1,0.5), (-2,0.5)]`, unit square                                 | Empty                                           |
+| 7   | Site near corner       | `[(0.01, 0.01)]`, unit square                                       | 1 cell clipped correctly                        |
+| 8   | 3 sites in square      | `[(0.1,0.1), (0.5,0.9), (0.9,0.1)]`, unit square                    | 3 cells, all bounded                            |
+| 9   | Diamond polygon        | 5 sites in diamond `[(1,0), (0,1), (-1,0), (0,-1)]`                 | 5 cells clipped                                 |
+| 10  | Triangle polygon       | 3 sites in triangle `[(0,0), (2,0), (1,2)]`                         | 3 cells bounded                                 |
+| 11  | All sites outside      | `[(-1,-1), (-1,2), (2,-1), (2,2)]`, unit square                     | Empty (prefiltered)                             |
+| 12  | 100 random sites       | `[0,10]²` box                                                       | All clipped, no crash                           |
+| 13  | Non-convex polygon     | L-shaped 6-vertex                                                   | `NON_CONVEX_BOUNDING_POLYGON`                   |
+| 14  | Clockwise polygon      | Unit square CW                                                      | `NON_CONVEX_BOUNDING_POLYGON`                   |
+| 15  | <3 verts               | 2-vertex polygon                                                    | `NON_CONVEX_BOUNDING_POLYGON`                   |
+| 16  | Collinear polygon      | 4 collinear vertices                                                | `NON_CONVEX_BOUNDING_POLYGON`                   |
+| 17  | Empty sites            | `sites = []`                                                        | `EMPTY_INPUT`                                   |
+| 18  | `in_box` basic         | 2 sites in `Aabb{0,0,2,2}`                                          | Bounded cells                                   |
 
 ### Prerequisite tests (update `test/test_voronoi.c3`)
 
-| # | Test | Old | New |
-|---|------|-----|-----|
-| 19 | `from_delaunay` boundary | Faults | Succeeds, interior vertices produce valid faces |
+| #   | Test                     | Old    | New                                             |
+| --- | ------------------------ | ------ | ----------------------------------------------- |
+| 19  | `from_delaunay` boundary | Faults | Succeeds, interior vertices produce valid faces |
 
 ## Edge cases (v1, no special handling)
 
