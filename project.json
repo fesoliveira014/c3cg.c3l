@@ -25,7 +25,7 @@
     "random-delaunay": {
       "type": "executable",
       "opt": "O3",
-      "sources": ["src/**", "tools/random_delaunay.c3"]
+      "sources": ["src/**", "scripts/random_delaunay.c3"]
     }
   }
 }
