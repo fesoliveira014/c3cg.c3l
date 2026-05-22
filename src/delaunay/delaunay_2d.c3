@@ -378,7 +378,9 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
             if (start != cg::INVALID_VERTEX && builder.hull_next[(int)start] != cg::INVALID_VERTEX) { break; }
         }
         if (start == cg::INVALID_VERTEX || builder.hull_next[(int)start] == cg::INVALID_VERTEX) { continue; }
+        if (builder.hull_prev[(int)start] == cg::INVALID_VERTEX) { continue; }
 
+        start = builder.hull_prev[(int)start];
         VertexIndex e = start;
         VertexIndex q = builder.hull_next[(int)e];
         while (true) {
@@ -396,6 +398,8 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
             if (e == start) { e = cg::INVALID_VERTEX; break; }
         }
         if (e == cg::INVALID_VERTEX) { continue; }
+
+        bool walk_backward = e == start;
 
         // Walk hull forward from e.
         HeIndex t = add_triangle(&builder, e, (VertexIndex)p, builder.hull_next[(int)e],
@@ -417,7 +421,32 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
             builder.hull_tri[(int)curr] = t;
 
             builder.hull_next[(int)curr] = cg::INVALID_VERTEX;
+            builder.hull_prev[(int)curr] = cg::INVALID_VERTEX;
+            builder.hull_tri[(int)curr] = cg::INVALID_HE;
             curr = qq;
+        }
+
+        if (walk_backward) {
+            while (true) {
+                q = builder.hull_prev[(int)e];
+                if (q == cg::INVALID_VERTEX) { break; }
+
+                Vec2f vq = { work_pos[(int)q].x, work_pos[(int)q].y };
+                Vec2f ve = { work_pos[(int)e].x, work_pos[(int)e].y };
+                Vec2f vp = { work_pos[(int)p].x, work_pos[(int)p].y };
+                if (geometry::orient_2d(vq, ve, vp) >= geometry::PREDICATE_ZERO) { break; }
+
+                t = add_triangle(&builder, q, (VertexIndex)p, e,
+                                  cg::INVALID_HE, builder.hull_tri[(int)e], builder.hull_tri[(int)q]);
+                (void)legalize(t + 2, work_pos, &builder);
+                builder.hull_tri[(int)q] = t;
+
+                VertexIndex removed = e;
+                e = q;
+                builder.hull_next[(int)removed] = cg::INVALID_VERTEX;
+                builder.hull_prev[(int)removed] = cg::INVALID_VERTEX;
+                builder.hull_tri[(int)removed] = cg::INVALID_HE;
+            }
         }
 
         // Update hull links.
@@ -425,13 +454,20 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         builder.hull_next[(int)e] = (VertexIndex)p;
         builder.hull_prev[(int)curr] = (VertexIndex)p;
         builder.hull_next[(int)p] = curr;
+        builder.hull_start = e;
 
-        // Hash new hull vertex.
+        // Hash new hull vertices.
         float pdx2 = work_pos[(int)p].x - builder.hull_center.x;
         float pdy2 = work_pos[(int)p].y - builder.hull_center.y;
         float angle2 = pseudo_angle(pdx2, pdy2);
         key = (usz)(angle2 * (float)hash_len);
         builder.hull_hash[key] = (VertexIndex)p;
+
+        float edx = work_pos[(int)e].x - builder.hull_center.x;
+        float edy = work_pos[(int)e].y - builder.hull_center.y;
+        float e_angle = pseudo_angle(edx, edy);
+        key = (usz)(e_angle * (float)hash_len);
+        builder.hull_hash[key] = e;
     }
 
     // ── Phase 6: Mesh finalization ──

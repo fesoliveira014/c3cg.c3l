@@ -31,6 +31,62 @@ fn void assert_all_reverse_edges_are_twinned(HalfEdgeMesh* mesh)
     }
 }
 
+fn bool d2_signs_strictly_opposite(geometry::PredicateSign a, geometry::PredicateSign b)
+{
+    return (a == geometry::PREDICATE_POSITIVE && b == geometry::PREDICATE_NEGATIVE)
+        || (a == geometry::PREDICATE_NEGATIVE && b == geometry::PREDICATE_POSITIVE);
+}
+
+fn bool d2_segments_cross_strict(Vec3f a, Vec3f b, Vec3f c, Vec3f d)
+{
+    Vec2f a2 = { a.x, a.y };
+    Vec2f b2 = { b.x, b.y };
+    Vec2f c2 = { c.x, c.y };
+    Vec2f d2 = { d.x, d.y };
+    geometry::PredicateSign o1 = geometry::orient_2d(a2, b2, c2);
+    geometry::PredicateSign o2 = geometry::orient_2d(a2, b2, d2);
+    geometry::PredicateSign o3 = geometry::orient_2d(c2, d2, a2);
+    geometry::PredicateSign o4 = geometry::orient_2d(c2, d2, b2);
+    return d2_signs_strictly_opposite(o1, o2) && d2_signs_strictly_opposite(o3, o4);
+}
+
+fn bool d2_is_unique_mesh_edge(HalfEdgeMesh* mesh, usz he_index)
+{
+    HeIndex twin = mesh.half_edges[he_index].twin;
+    return twin == cg::INVALID_HE || he_index < (usz)twin;
+}
+
+fn bool d2_edges_share_vertex(HalfEdgeMesh* mesh, usz a, usz b)
+{
+    VertexIndex a0 = mesh.half_edges[a].origin;
+    VertexIndex a1 = mesh.half_edges[mesh.half_edges[a].next].origin;
+    VertexIndex b0 = mesh.half_edges[b].origin;
+    VertexIndex b1 = mesh.half_edges[mesh.half_edges[b].next].origin;
+    return a0 == b0 || a0 == b1 || a1 == b0 || a1 == b1;
+}
+
+fn int count_crossing_mesh_edges(HalfEdgeMesh* mesh)
+{
+    int crossings = 0;
+    for (usz i = 0; i < mesh.half_edges.len; i++) {
+        if (!d2_is_unique_mesh_edge(mesh, i)) { continue; }
+        VertexIndex i0 = mesh.half_edges[i].origin;
+        VertexIndex i1 = mesh.half_edges[mesh.half_edges[i].next].origin;
+        for (usz j = i + 1; j < mesh.half_edges.len; j++) {
+            if (!d2_is_unique_mesh_edge(mesh, j)) { continue; }
+            if (d2_edges_share_vertex(mesh, i, j)) { continue; }
+            VertexIndex j0 = mesh.half_edges[j].origin;
+            VertexIndex j1 = mesh.half_edges[mesh.half_edges[j].next].origin;
+            if (d2_segments_cross_strict(
+                    mesh.positions[(int)i0], mesh.positions[(int)i1],
+                    mesh.positions[(int)j0], mesh.positions[(int)j1])) {
+                crossings++;
+            }
+        }
+    }
+    return crossings;
+}
+
 fn void test_delaunay_2d_empty() @test
 {
     Vec3f[] pts = {};
@@ -204,6 +260,24 @@ fn void test_delaunay_2d_random_prefixes_validate() @test
         mesh.destroy();
         free(pts);
     }
+}
+
+fn void test_delaunay_2d_random_hundred_has_no_crossing_edges() @test
+{
+    Vec3f[100] pts;
+    uint state = 42;
+    for (usz i = 0; i < pts.len; i++) {
+        state = state * 1103515245 + 12345;
+        float x = (float)(state % 10000) / 10000.0f;
+        state = state * 1103515245 + 12345;
+        float y = (float)(state % 10000) / 10000.0f;
+        pts[i] = { x, y, 0 };
+    }
+
+    HalfEdgeMesh mesh = delaunay::delaunay_2d(mem, pts[..])!!;
+    defer mesh.destroy();
+    mesh.validate()!!;
+    assert(count_crossing_mesh_edges(&mesh) == 0);
 }
 
 fn void test_delaunay_2d_cocircular() @test

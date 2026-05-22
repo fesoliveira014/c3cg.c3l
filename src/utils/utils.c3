@@ -50,14 +50,15 @@ fn PpmImage? render_delaunay(Allocator alloc, HalfEdgeMesh* mesh, PpmOptions opt
     float world_min_x = bbox_min.x - bbox_w * margin;
     float world_max_y = bbox_max.y + bbox_h * margin;
 
-    // Draw each half-edge as a line
+    // Draw each half-edge as a line (skip reverse to avoid double-draw)
     for (usz i = 0; i < mesh.half_edges.len; i++) {
         HalfEdge he = mesh.half_edges[i];
-        if (he.twin < 0) continue;
-        HalfEdge twin = mesh.half_edges[he.twin];
+        // Draw boundary edges always. For interior edges, draw only one direction.
+        if (he.twin != cg::INVALID_HE && i > (usz)he.twin) continue;
 
         Vec3f p0 = mesh.positions[he.origin];
-        Vec3f p1 = mesh.positions[twin.origin];
+        HeIndex next_he = he.next;
+        Vec3f p1 = mesh.positions[mesh.half_edges[next_he].origin];
 
         int x0 = (int)((p0.x - world_min_x) / world_w * (float)width);
         int y0 = (int)((world_max_y - p0.y) / world_h * (float)height);
