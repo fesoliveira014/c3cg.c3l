@@ -166,6 +166,17 @@ import cg;
 fn int[]? hull_2d(Allocator alloc, Vec3f[] positions);
 fn HalfEdgeMesh? hull_3d(Allocator alloc, Vec3f[] positions);
 
+module cg::voronoi;
+import cg;
+
+struct VoronoiDiagram {
+    HalfEdgeMesh mesh;
+    Vec3f[] sites;
+}
+
+fn VoronoiDiagram? from_delaunay(Allocator alloc, HalfEdgeMesh* delaunay);
+fn HalfEdgeMesh? to_delaunay(Allocator alloc, VoronoiDiagram* diagram);
+
 module cg::delaunay;
 import cg;
 
