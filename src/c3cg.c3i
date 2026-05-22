@@ -67,7 +67,8 @@ faultdef
     NON_PLANAR_FACE,
     OPEN_CELL_ON_BOUNDARY,
     DUAL_REQUIRES_CLOSED_MESH,
-    DUAL_VERTEX_COUNT_MISMATCH;
+    DUAL_VERTEX_COUNT_MISMATCH,
+    NON_CONVEX_BOUNDING_POLYGON;
 
 // ── cg::geometry ────────────────────────────────────────────
 
@@ -176,6 +177,8 @@ struct VoronoiDiagram {
 
 fn VoronoiDiagram? from_delaunay(Allocator alloc, HalfEdgeMesh* delaunay);
 fn HalfEdgeMesh? to_delaunay(Allocator alloc, VoronoiDiagram* diagram);
+fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon);
+fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 
 module cg::delaunay;
 import cg;
