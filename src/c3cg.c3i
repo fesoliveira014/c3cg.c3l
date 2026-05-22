@@ -194,8 +194,16 @@ module cg::utils;
 import cg;
 import cg::utils::ppm;
 
+struct OverlayOptions {
+    PpmOptions common;
+    uint delaunay_edge_color;
+    uint voronoi_edge_color;
+    uint site_color;
+}
+
 fn PpmImage? render_delaunay(Allocator alloc, HalfEdgeMesh* mesh, PpmOptions options);
 fn PpmImage? render_voronoi(Allocator alloc, VoronoiDiagram* diagram, PpmOptions options);
+fn PpmImage? render_overlay(Allocator alloc, HalfEdgeMesh* delaunay, VoronoiDiagram* voronoi, OverlayOptions options);
 
 module cg::utils::ppm;
 import cg;

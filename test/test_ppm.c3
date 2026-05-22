@@ -5,6 +5,7 @@ import cg::utils;
 import cg::utils::ppm;
 import cg::half_edge;
 import cg::delaunay;
+import cg::voronoi;
 
 fn void test_new_ppm() @test
 {
@@ -131,5 +132,49 @@ fn void test_render_delaunay_icosahedron() @test
 
     // Should have some edge pixels and some vertex pixels
     assert(edge_px > 0);
+    assert(site_px > 0);
+}
+
+fn void test_render_overlay_icosahedron() @test
+{
+    HalfEdgeMesh ico = half_edge::from_triangles(mem, ICO_POSITIONS[..], ICO_INDICES[..])!!;
+    defer ico.destroy();
+
+    VoronoiDiagram diagram = voronoi::from_delaunay(mem, &ico)!!;
+    defer diagram.destroy();
+
+    OverlayOptions opts = {
+        .common = {
+            .width      = 200,
+            .height     = 200,
+            .edge_color = 0,
+            .site_color = 0,
+            .bg_color   = 0xFF000000,
+            .line_width = 1,
+            .dot_radius = 3,
+            .margin     = 0.1f,
+        },
+        .delaunay_edge_color = 0xFF00FF00,
+        .voronoi_edge_color  = 0xFF0000FF,
+        .site_color          = 0xFFFF0000,
+    };
+
+    PpmImage img = utils::render_overlay(mem, &ico, &diagram, opts)!!;
+    defer img.destroy();
+
+    assert(img.width == 200);
+    assert(img.height == 200);
+
+    uint delaunay_px = 0;
+    uint voronoi_px = 0;
+    uint site_px = 0;
+    for (usz i = 0; i < img.pixels.len; i++) {
+        if (img.pixels[i] == opts.delaunay_edge_color) delaunay_px++;
+        if (img.pixels[i] == opts.voronoi_edge_color) voronoi_px++;
+        if (img.pixels[i] == opts.site_color) site_px++;
+    }
+
+    assert(delaunay_px > 0);
+    assert(voronoi_px > 0);
     assert(site_px > 0);
 }

@@ -262,3 +262,101 @@ fn PpmImage? render_voronoi(Allocator alloc, VoronoiDiagram* diagram, PpmOptions
 
     return img;
 }
+
+fn PpmImage? render_overlay(Allocator alloc, HalfEdgeMesh* delaunay, VoronoiDiagram* voronoi, OverlayOptions options)
+{
+    if (delaunay.positions.len == 0 && voronoi.mesh.positions.len == 0) return cg::EMPTY_INPUT~;
+
+    Vec3f bbox_min, bbox_max;
+    bool first = true;
+
+    for (usz i = 0; i < delaunay.positions.len; i++) {
+        Vec3f p = delaunay.positions[i];
+        if (first) { bbox_min = p; bbox_max = p; first = false; }
+        else {
+            if (p.x < bbox_min.x) bbox_min.x = p.x;
+            if (p.y < bbox_min.y) bbox_min.y = p.y;
+            if (p.x > bbox_max.x) bbox_max.x = p.x;
+            if (p.y > bbox_max.y) bbox_max.y = p.y;
+        }
+    }
+    for (usz i = 0; i < voronoi.mesh.positions.len; i++) {
+        Vec3f p = voronoi.mesh.positions[i];
+        if (first) { bbox_min = p; bbox_max = p; first = false; }
+        else {
+            if (p.x < bbox_min.x) bbox_min.x = p.x;
+            if (p.y < bbox_min.y) bbox_min.y = p.y;
+            if (p.x > bbox_max.x) bbox_max.x = p.x;
+            if (p.y > bbox_max.y) bbox_max.y = p.y;
+        }
+    }
+
+    PpmOptions copts = options.common;
+    uint line_width = copts.line_width;
+    if (line_width < 1) line_width = 1;
+    uint dot_radius = copts.dot_radius;
+    if (dot_radius < 1) dot_radius = 1;
+    float margin = copts.margin;
+    if (margin < 0.0f) margin = 0.05f;
+
+    float bbox_w = bbox_max.x - bbox_min.x;
+    float bbox_h = bbox_max.y - bbox_min.y;
+    if (bbox_w < 0.0001f) bbox_w = 1.0f;
+    if (bbox_h < 0.0001f) bbox_h = 1.0f;
+
+    uint width = copts.width;
+    uint height = copts.height;
+    if (height == 0) {
+        height = (uint)((float)width * bbox_h / bbox_w);
+        if (height < 1) height = 1;
+    }
+
+    PpmImage img = ppm::new_ppm(alloc, width, height)!!;
+    defer catch img.destroy();
+    ppm::fill(&img, copts.bg_color);
+
+    float world_w = bbox_w * (1.0f + 2.0f * margin);
+    float world_h = bbox_h * (1.0f + 2.0f * margin);
+    float world_min_x = bbox_min.x - bbox_w * margin;
+    float world_max_y = bbox_max.y + bbox_h * margin;
+
+    for (usz i = 0; i < delaunay.half_edges.len; i++) {
+        HalfEdge he = delaunay.half_edges[i];
+        if (he.twin != cg::INVALID_HE && i > (usz)he.twin) continue;
+
+        Vec3f p0 = delaunay.positions[he.origin];
+        Vec3f p1 = delaunay.positions[delaunay.half_edges[he.next].origin];
+
+        int x0 = (int)((p0.x - world_min_x) / world_w * (float)width);
+        int y0 = (int)((world_max_y - p0.y) / world_h * (float)height);
+        int x1 = (int)((p1.x - world_min_x) / world_w * (float)width);
+        int y1 = (int)((world_max_y - p1.y) / world_h * (float)height);
+
+        ppm::draw_line(&img, x0, y0, x1, y1, options.delaunay_edge_color, line_width);
+    }
+
+    HalfEdgeMesh* vmesh = &voronoi.mesh;
+    for (usz i = 0; i < vmesh.half_edges.len; i++) {
+        HalfEdge he = vmesh.half_edges[i];
+        if (he.twin != cg::INVALID_HE && i > (usz)he.twin) continue;
+
+        Vec3f p0 = vmesh.positions[he.origin];
+        Vec3f p1 = vmesh.positions[vmesh.half_edges[he.next].origin];
+
+        int x0 = (int)((p0.x - world_min_x) / world_w * (float)width);
+        int y0 = (int)((world_max_y - p0.y) / world_h * (float)height);
+        int x1 = (int)((p1.x - world_min_x) / world_w * (float)width);
+        int y1 = (int)((world_max_y - p1.y) / world_h * (float)height);
+
+        ppm::draw_line(&img, x0, y0, x1, y1, options.voronoi_edge_color, line_width);
+    }
+
+    for (usz i = 0; i < voronoi.sites.len; i++) {
+        Vec3f p = voronoi.sites[i];
+        int cx = (int)((p.x - world_min_x) / world_w * (float)width);
+        int cy = (int)((world_max_y - p.y) / world_h * (float)height);
+        ppm::draw_circle(&img, cx, cy, dot_radius, options.site_color, true, line_width);
+    }
+
+    return img;
+}
