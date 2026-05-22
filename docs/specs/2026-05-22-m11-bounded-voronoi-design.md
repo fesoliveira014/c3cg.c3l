@@ -2,7 +2,7 @@
 
 ## Overview
 
-Clip Voronoi cells to a convex polygon using voronator-rs's approach: add distant helper points, compute Delaunay + unbounded Voronoi, then Sutherland-Hodgman clip each original-site cell against the bounding polygon. Produces a polygonal `HalfEdgeMesh` where each face is a bounded Voronoi cell. `in_box` is a thin AABB→polygon wrapper.
+Clip Voronoi cells to a convex polygon using voronator-rs's approach: add distant helper points, compute Delaunay + unbounded Voronoi, then Sutherland-Hodgman clip each cell against the bounding polygon. Produces a polygonal `HalfEdgeMesh` where each face is a bounded Voronoi cell. `in_box` is a thin AABB→polygon wrapper.
 
 ## Module
 
@@ -10,8 +10,8 @@ New file `src/voronoi/bounded.c3` — part of `module cg::voronoi;`.
 
 ## Prerequisite changes (from M10)
 
-- Remove boundary check from `dual_from_vertices` (line 17: `twin == INVALID_HE` → `DUAL_REQUIRES_CLOSED_MESH`). The dual of a boundary vertex may produce a face ring with < 3 vertices — callers must handle or discard those faces. With helper points in M11, original sites are strictly interior (≥ 3 incident Delaunay triangles) so their face rings are always complete.
-- Remove boundary check from `from_delaunay` (line 18: `twin == INVALID_HE` → `OPEN_CELL_ON_BOUNDARY`). Planar Delaunay naturally has boundary edges; unbounded Voronoi is valid output. Boundary-vertex dual faces may be degenerate — callers should validate if needed.
+- Remove boundary check from `dual_from_vertices` (line 17: `twin == INVALID_HE` → `DUAL_REQUIRES_CLOSED_MESH`). The dual of a boundary vertex may produce a face ring with < 3 vertices — callers must handle or discard those faces. With helper points in M11, original sites are interior so their rings are always complete (≥ 3 vertices).
+- Remove boundary check from `from_delaunay` (line 18: `twin == INVALID_HE` → `OPEN_CELL_ON_BOUNDARY`). Planar Delaunay naturally has boundary edges; unbounded Voronoi is valid output.
 - Update M10 test `test_voronoi_boundary_faults`: change from "faults OPEN_CELL_ON_BOUNDARY" to "succeeds, interior vertices produce valid faces."
 
 ## Public API
@@ -21,7 +21,7 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon);
 fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 ```
 
-Umbrella additions in `src/c3cg.c3i`:
+Umbrella additions in `src/c3cg.c3i`, under `module cg::voronoi`:
 
 ```c3
 fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon);
@@ -33,10 +33,20 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
 ### `in_polygon`
 
 1. Validate `polygon.len >= 3` — else `NON_CONVEX_BOUNDING_POLYGON`.
-2. Validate `polygon` is convex + CCW + non-degenerate: for each consecutive triple `(p, q, r)`, `orient_2d({p.x, p.y}, {q.x, q.y}, {r.x, r.y}) >= 0`. Additionally, require at least one triple with `> 0` (strictly positive turn) to reject collinear/degenerate polygons. Also require `polygon` bbox extents > 0 (nonzero area). Failure → `NON_CONVEX_BOUNDING_POLYGON`.
+2. Validate `polygon` convex + CCW + non-degenerate: for each consecutive triple (p, q, r), `orient_2d({p.x, p.y}, {q.x, q.y}, {r.x, r.y}) >= 0`. Require at least one triple > 0 and bbox extents > 0. Failure → `NON_CONVEX_BOUNDING_POLYGON`.
 3. Validate `sites.len >= 1` — else `EMPTY_INPUT`.
 
-4. Compute polygon bbox, add 4 helper points ~2× polygon extent away:
+4. **Prefilter sites**: test each site against polygon (point-in-convex-polygon: `orient_2d` against each edge — site left-of-or-on all edges). Keep only inside/on sites. If 0 survive → return empty `VoronoiDiagram`.
+
+5. **Branch on surviving count N**:
+   - **N = 0**: return empty (mesh = {}, sites = {}).
+   - **N = 1**: cell = polygon. Build via `from_polygons` → `VoronoiDiagram { mesh, [site] }`.
+   - **N = 2**: perpendicular bisector, clip polygon via half-plane S-H for each site → two cells.
+   - **N ≥ 3**: helper-point Delaunay path below.
+
+#### N ≥ 3 helper-point path
+
+6. Compute polygon bbox, add 4 helper points ~2× extent away:
    ```
    w = max.x - min.x;  h = max.y - min.y
    helpers = [
@@ -46,104 +56,77 @@ fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
      {min.x + w/2,   max.y + h  }
    ]
    ```
-   Helper points are far enough outside that no original site's Voronoi cell includes a helper circumcenter. They serve only to extend the Delaunay beyond the polygon.
+   Helper points extend the Delaunay beyond the polygon so boundary sites produce complete Voronoi cells (≥ 3 circumcenter vertices).
 
-5. `all_points = alloc.concat(sites, helpers)`.
-6. `delaunay_mesh = delaunay::delaunay_2d(alloc, all_points)!`; `defer free(all_points)`.
-7. `defer delaunay_mesh.destroy()` (destroyed on both success and fault paths).
-8. `voronoi_diagram = voronoi::from_delaunay(alloc, &delaunay_mesh)!` (no boundary fault).
-9. `defer voronoi_diagram.destroy()`.
+7. Consolidated point array:
+   ```c3
+   usz total = sites.len + (usz)4;
+   Vec3f[] all_points = mem::alloc::new_array(alloc, Vec3f, (sz)total);
+   defer free(all_points);
+   // copy sites, then helpers
+   ```
 
-10. **Match Voronoi faces to original sites**: build a position→VertexIndex lookup by comparing each original `sites[i]` against `delaunay_mesh.positions` (linear scan is fine — N and V are bounded for 2D diagrams). The matched vertex index IS the Voronoi face index (because `from_delaunay` copies Delaunay positions to Voronoi sites, and each site becomes exactly one Voronoi face).
+8. `delaunay_mesh = delaunay::delaunay_2d(alloc, all_points)!`.
+9. `defer delaunay_mesh.destroy()` (unconditional — temporary).
+10. `voronoi_diagram = voronoi::from_delaunay(alloc, &delaunay_mesh)!`.
+11. `defer voronoi_diagram.destroy()` (unconditional — temporary).
 
-11. For each matched face `f`:
-    a. Walk face via `voronoi_diagram.mesh.face_vertices(f, out[])`.
+12. **Match faces to sites**: compare each `sites[i]` against `voronoi_diagram.sites[]` (position equality within 1e-12). Each site maps to one Voronoi face index.
+
+13. Per matched face:
+    a. `face_vertices(f, out[])`. < 3 vertices → skip (won't happen for interior sites).
     b. Collect positions from `voronoi_diagram.mesh.positions[out[..]]`.
-    c. S-H clip against the bounding polygon.
-    d. If clipped has < 3 vertices → face is outside the polygon, drop it (cell falls entirely outside).
-    e. Otherwise accumulate positions for `from_polygons` and record the site.
+    c. S-H clip against bounding polygon.
+    d. < 3 after clip → drop.
+    e. Accumulate positions + indices for `from_polygons`.
 
-Sites outside the polygon produce cells that cover most of the plane. After S-H clipping, these cells reduce to nothing — they are naturally dropped. No explicit inside/outside prefiltering is needed; the clip handles it for all N ≥ 3.
+14. If no surviving cells → empty result.
+15. Otherwise: `from_polygons(alloc, positions, offsets, indices)` → `VoronoiDiagram { mesh, sites }`.
 
-12. If no surviving cells → construct empty result:
-    ```c3
-    VoronoiDiagram result;
-    result.mesh = {};        // zero-length arrays, 0 faces
-    result.sites = {};
-    return result;
-    ```
+### N=2 half-plane clip
 
-13. Otherwise:
-    ```c3
-    clipped_mesh = half_edge::from_polygons(alloc, accumulated_positions, face_offsets, face_indices)!;
-    VoronoiDiagram result;
-    result.mesh = clipped_mesh;
-    result.sites = surviving_sites;   // copy of original sites for surviving cells
-    return result;
-    ```
-
-14. `voronoi_diagram.destroy()` / `delaunay_mesh.destroy()` via `defer catch`.
-
-### N=1 and N=2 (before Delaunay path)
-
-**N=1**: test if site is inside polygon (point-in-convex-polygon via orient_2d against each edge). If inside → cell = polygon. Build via `from_polygons` with one face. If outside → empty result.
-
-**N=2**: test each site's position:
-- Both inside: compute perpendicular bisector of the two sites. Clip polygon against bisector half-plane for each site. Two cells.
-- One inside, one outside: the inside site's cell = the polygon (no other site to clip against). Output 1 cell.
-- Both outside: empty result.
-
-Half-plane clip: for a candidate point `p`, compute `sign_p = orient_2d({a.x, a.y}, {b.x, b.y}, {p.x, p.y})` and `sign_site = same for the site`. `p` is inside the half-plane when `sign_p` matches `sign_site`. Use same S-H edge loop with the bisector line as the single clipping edge.
+Perpendicular bisector of sites a, b. For a point p: `orient_2d({a.x,a.y}, {b.x,b.y}, {p.x,p.y})`. p is in a's half-plane when its sign matches an extra test point on a's side. Single-edge S-H against the bisector line.
 
 ### Sutherland-Hodgman
 
-Clips a polygon against a convex clipping polygon edge by edge. Both input and clip polygons are CCW. Uses `orient_2d` (all vectors as `Vec2f` from `Vec3f.{x, y}`). Clipping polygon stored as `Vec3f[]`; positions extracted with `{p.x, p.y}`.
+Clips polygon against convex CCW clip polygon edge by edge. Uses `Vec2f` from `Vec3f.{x, y}`.
 
 ```
-For each clip_edge (a, b) in bounding_polygon:
-    For each input_edge (p, q) in current_polygon:
-        p_inside = orient_2d({a.x,a.y}, {b.x,b.y}, {p.x,p.y}) >= geometry::PREDICATE_ZERO
-        q_inside = orient_2d({a.x,a.y}, {b.x,b.y}, {q.x,q.y}) >= geometry::PREDICATE_ZERO
-        if p_inside && q_inside:      output q
-        if p_inside && !q_inside:     output line_intersection(a, b, p, q)
-        if !p_inside && q_inside:     output line_intersection(a, b, p, q), q
-        if !p_inside && !q_inside:    output nothing
+For each clip_edge (a, b):
+    For each input_edge (p, q):
+        p_in = orient_2d({a.x,a.y}, {b.x,b.y}, {p.x,p.y}) >= PREDICATE_ZERO
+        q_in = orient_2d({a.x,a.y}, {b.x,b.y}, {q.x,q.y}) >= PREDICATE_ZERO
+        if p_in && q_in:       output q
+        if p_in && !q_in:      output intersection(a,b, p,q)
+        if !p_in && q_in:      output intersection(a,b, p,q), q
+        if !p_in && !q_in:     nothing
 ```
 
-`line_intersection(a, b, p, q)` computes the 2D intersection of the infinite lines through `(a,b)` and `(p,q)`. Called only when the segments are confirmed to cross (one endpoint on each side). Uses Cramer's rule on the 2D linear system.
-
-Half-plane variant (for N=2 bisector): same algorithm but with a single clipping edge `(a, b)` = two points on the bisector line.
+`intersection` via Cramer's rule on the 2D lines — only called when endpoints are on opposite sides.
 
 ### Vertex deduplication
 
-Before `from_polygons`, deduplicate accumulated positions (within `1e-12`). Build a lookup from old position index to new deduplicated index, remap face indices. `from_polygons` copies positions as-is and pairs twins when faces share exact vertex indices — dedup prevents near-duplicate vertices from preventing twin pairing.
+Before `from_polygons`, deduplicate positions (within 1e-12), remap face indices. `from_polygons` copies positions as-is; near-duplicates prevent twin pairing.
 
 ## Faults
 
 | Fault | When |
 |-------|------|
-| `EMPTY_INPUT` | `sites.len == 0` (existing) |
-| `NON_CONVEX_BOUNDING_POLYGON` | `polygon` not convex or not CCW (new) |
+| `EMPTY_INPUT` | `sites.len == 0` (existing in root `module cg;`) |
+| `NON_CONVEX_BOUNDING_POLYGON` | polygon not convex/CCW/degenerate (new) |
 
-New faultdef in `src/c3cg.c3i`, in the root `module cg;` fault block (alongside `EMPTY_INPUT`, `INDEX_OUT_OF_RANGE`, etc.):
+Add to root fault block in `src/c3cg.c3i`:
 
 ```c3
 faultdef NON_CONVEX_BOUNDING_POLYGON;
 ```
 
-### Internal faults (propagated from callees)
-
-- `DEGENERATE_INPUT` from `delaunay_2d` (n<3 — caught by N=1,N=2 special cases)
-- Faults from `half_edge::from_polygons` (OOM, index out of range)
-
 ## Memory
 
-- `all_points` (sites + helpers): `defer free` after Delaunay call.
-- `delaunay_mesh`: `defer catch delaunay_mesh.destroy()`.
-- `voronoi_diagram`: `defer catch voronoi_diagram.destroy()`.
-- Accumulated positions and indices for `from_polygons`: freed after mesh construction.
-- On fault during final `from_polygons`: accumulated arrays freed by `defer catch`.
-- Returned `VoronoiDiagram` owns only the final clipped mesh and sites array.
+- `all_points`: `defer free` after Delaunay call.
+- `delaunay_mesh`, `voronoi_diagram`: `defer destroy()` (unconditional — temporaries).
+- Accumulated positions/indices: freed after `from_polygons` or on fault via `defer catch`.
+- Returned `VoronoiDiagram` owns only final clipped mesh + sites.
 
 ## Tests
 
@@ -151,34 +134,33 @@ File: `test/test_voronoi_bounded.c3`
 
 | # | Test | Input | Expected |
 |---|------|-------|----------|
-| 1 | 4 sites in unit square | `[(0.25,0.25), (0.75,0.25), (0.75,0.75), (0.25,0.75)]`, unit square | 4 cells, all bounded, vertices on or inside square |
-| 2 | N=1 inside | Single site at `(0.5, 0.5)`, unit square | 1 cell = unit square polygon |
-| 3 | N=1 outside | Single site at `(-1, 0.5)`, unit square | Empty result (0 faces, 0 sites) |
+| 1 | 4 sites in unit square | `[(0.25,0.25), (0.75,0.25), (0.75,0.75), (0.25,0.75)]`, unit square | 4 cells, all bounded, vertices inside/on square |
+| 2 | N=1 inside | `[(0.5, 0.5)]`, unit square | 1 cell = unit square |
+| 3 | N=1 outside | `[(-1, 0.5)]`, unit square | Empty (prefiltered) |
 | 4 | N=2 both inside | `[(0.25,0.5), (0.75,0.5)]`, unit square | 2 cells split by vertical bisector |
-| 5 | N=2 one outside | `[(0.5,0.5), (-1,0.5)]`, unit square | 1 cell (the inside site gets the polygon) |
-| 6 | N=2 both outside | `[(-1,0.5), (-2,0.5)]`, unit square | Empty result |
-| 7 | Site near corner | Single site at `(0.01, 0.01)`, unit square | Cell clipped, boundary vertices on polygon edges |
-| 8 | 3 sites in triangle | `[(0.1,0.1), (0.5,0.9), (0.9,0.1)]`, unit square | 3 cells, all bounded, adjacent cells share edges |
-| 9 | Diamond polygon | 5 sites in diamond `[(1,0), (0,1), (-1,0), (0,-1)]` | All 5 cells clipped, corner cells triangular |
-| 10 | Triangle polygon | 3 sites in triangle `[(0,0), (2,0), (1,2)]` | All cells bounded, boundary cells clipped |
-| 11 | All sites outside | `[(-1,-1), (-1,2), (2,-1), (2,2)]` in unit square | Empty result |
-| 12 | Many sites, large box | 100 random sites in `[0,10]²` | All cells clipped, no crashes |
-| 13 | Non-convex polygon faults | L-shaped 6-vertex polygon | `NON_CONVEX_BOUNDING_POLYGON` |
-| 14 | Clockwise polygon faults | Unit square CW | `NON_CONVEX_BOUNDING_POLYGON` |
-| 15 | Polygon with <3 verts | 2-vertex polygon | `NON_CONVEX_BOUNDING_POLYGON` |
-| 16 | Empty sites | `sites = []` | `EMPTY_INPUT` |
-| 17 | `in_box` basic | 2 sites in `Aabb{0,0,2,2}` | Bounded Voronoi, cells clipped to box boundary |
+| 5 | N=2 one outside | `[(0.5,0.5), (-1,0.5)]`, unit square | 1 cell (inside site gets polygon) |
+| 6 | N=2 both outside | `[(-1,0.5), (-2,0.5)]`, unit square | Empty |
+| 7 | Site near corner | `[(0.01, 0.01)]`, unit square | 1 cell clipped correctly |
+| 8 | 3 sites in square | `[(0.1,0.1), (0.5,0.9), (0.9,0.1)]`, unit square | 3 cells, all bounded |
+| 9 | Diamond polygon | 5 sites in diamond `[(1,0), (0,1), (-1,0), (0,-1)]` | 5 cells clipped |
+| 10 | Triangle polygon | 3 sites in triangle `[(0,0), (2,0), (1,2)]` | 3 cells bounded |
+| 11 | All sites outside | `[(-1,-1), (-1,2), (2,-1), (2,2)]`, unit square | Empty (prefiltered) |
+| 12 | 100 random sites | `[0,10]²` box | All clipped, no crash |
+| 13 | Non-convex polygon | L-shaped 6-vertex | `NON_CONVEX_BOUNDING_POLYGON` |
+| 14 | Clockwise polygon | Unit square CW | `NON_CONVEX_BOUNDING_POLYGON` |
+| 15 | <3 verts | 2-vertex polygon | `NON_CONVEX_BOUNDING_POLYGON` |
+| 16 | Collinear polygon | 4 collinear vertices | `NON_CONVEX_BOUNDING_POLYGON` |
+| 17 | Empty sites | `sites = []` | `EMPTY_INPUT` |
+| 18 | `in_box` basic | 2 sites in `Aabb{0,0,2,2}` | Bounded cells |
 
-### Prerequisite tests (updated in `test/test_voronoi.c3`)
+### Prerequisite tests (update `test/test_voronoi.c3`)
 
-| # | Test | Old expected | New expected |
-|---|------|-------------|-------------|
-| 18 | `from_delaunay` with boundary mesh | `OPEN_CELL_ON_BOUNDARY` | Succeeds, mesh has boundary half-edges |
-| 19 | `dual_from_vertices` with boundary mesh | (untested) | Succeeds for interior vertices |
-| 20 | `from_delaunay` round-trip (closed mesh) | Still passes | Unchanged — closed meshes still work |
+| # | Test | Old | New |
+|---|------|-----|-----|
+| 19 | `from_delaunay` boundary | Faults | Succeeds, interior vertices produce valid faces |
 
-## Edge cases (v1 no special handling)
+## Edge cases (v1, no special handling)
 
-- Sites exactly on polygon edge: cell may be degenerate/zero-area. No fault.
-- Collinear/coincident sites: Delaunay handles, cells may be degenerate.
-- Output mesh has boundary half-edges along the clipping polygon — this is expected for bounded Voronoi. No `POLYGON_HAS_BOUNDARY` fault.
+- Sites on polygon edge: degenerate/zero-area cells possible. No fault.
+- Collinear/coincident sites: Delaunay handles; N=2 path catches.
+- Output mesh has boundary half-edges along clipping polygon — expected for bounded Voronoi.
