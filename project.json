@@ -21,6 +21,11 @@
       "type": "executable",
       "opt": "O3",
       "sources": ["src/**", "bench/**"]
+    },
+    "random-delaunay": {
+      "type": "executable",
+      "opt": "O3",
+      "sources": ["src/**", "tools/random_delaunay.c3"]
     }
   }
 }
