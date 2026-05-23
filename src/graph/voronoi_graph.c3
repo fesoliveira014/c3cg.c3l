@@ -22,12 +22,13 @@ fn VoronoiCellView VoronoiGraph.cell(&self, FaceIndex c)
 {
     int start = self.cell_offsets[(int)c];
     int end   = self.cell_offsets[(int)c + 1];
+    int count = end - start;
     return {
         .index     = c,
         .site      = self.sites[(int)c],
         .centroid  = self.centroids[(int)c],
-        .ring      = self.ring_indices[start..end],
-        .neighbors = self.neighbor_indices[start..end],
+        .ring      = self.ring_indices[start : count],
+        .neighbors = self.neighbor_indices[start : count],
     };
 }
 
@@ -66,7 +67,7 @@ fn VoronoiGraph? from_voronoi(Allocator alloc, VoronoiDiagram* diagram)
     for (usz f = 0; f < cell_count; f++) {
         FaceIndex face = (FaceIndex)(int)f;
         int deg = diagram.mesh.face_degree(face);
-        diagram.mesh.face_half_edges(face, he_scratch[..(usz)deg])!;
+        diagram.mesh.face_half_edges(face, he_scratch)!;
         usz offset = (usz)cell_offsets[f];
 
         for (int i = 0; i < deg; i++) {
