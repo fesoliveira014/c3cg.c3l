@@ -280,3 +280,19 @@ struct DelaunayTriangleView {
 fn DelaunayGraph?         from_delaunay(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] circumcenters);
 fn DelaunayGraph?         from_planar_delaunay(Allocator alloc, HalfEdgeMesh* mesh);
 fn DelaunayGraph?         from_spherical_delaunay(Allocator alloc, HalfEdgeMesh* mesh, float radius);
+
+module cg::triangulate;
+import cg;
+fn int[]? triangulate_polygon(Allocator alloc, Vec3f[] polygon);
+
+module cg::subdivide;
+import cg;
+fn HalfEdgeMesh? loop_subdivide(Allocator alloc, HalfEdgeMesh* mesh);
+
+module cg::primitives;
+import cg;
+fn HalfEdgeMesh? tetrahedron(Allocator alloc);
+fn HalfEdgeMesh? octahedron(Allocator alloc);
+fn HalfEdgeMesh? icosahedron(Allocator alloc);
+fn HalfEdgeMesh? triangulated_cube(Allocator alloc);
+fn HalfEdgeMesh? icosphere(Allocator alloc, int subdivisions, float radius);
