@@ -9,18 +9,16 @@ fn int map_y(float y, float wy, float wh, uint h) { return (int)((wy - y) / wh *
 
 fn void main()
 {
-    // Star-shaped polygon (CCW)
-    Vec3f[10] polygon = {
-        { 0, 3, 0 },
-        { 0.951f, 1.309f, 0 },
+    // L-shaped polygon (CCW) — simple, non-convex, monotone
+    Vec3f[8] polygon = {
+        { 0, 0, 0 },
         { 3, 0, 0 },
-        { 0.951f, -1.309f, 0 },
-        { 0, -3, 0 },
-        { -0.951f, -1.309f, 0 },
-        { -3, 0, 0 },
-        { -0.951f, 1.309f, 0 },
-        { 0.25f, 0, 0 },
-        { -0.25f, 0, 0 },
+        { 3, 1, 0 },
+        { 2, 1, 0 },
+        { 2, 3, 0 },
+        { 1, 3, 0 },
+        { 1, 1, 0 },
+        { 0, 1, 0 },
     };
 
     // Triangulate
@@ -58,16 +56,7 @@ fn void main()
     defer img.destroy();
     ppm::fill(&img, 0xFFFFFFFF);
 
-    // Draw polygon edges (black, thick)
-    for (usz i = 0; i < polygon.len; i++) {
-        usz j = (i + 1) % polygon.len;
-        ppm::draw_line(&img,
-            map_x(polygon[i].x, wx, ww, width), map_y(polygon[i].y, wy, wh, height),
-            map_x(polygon[j].x, wx, ww, width), map_y(polygon[j].y, wy, wh, height),
-            0xFF000000, 2);
-    }
-
-    // Draw triangulation edges (red, thin)
+    // Draw triangulation edges FIRST (thin red) — boundary will overlay later
     for (usz t = 0; t < tri_indices.len; t += 3) {
         int a = tri_indices[t];
         int b = tri_indices[(usz)(t + 1)];
@@ -81,6 +70,15 @@ fn void main()
         ppm::draw_line(&img, ax, ay, bx, by, 0xFFFF0000, 1);
         ppm::draw_line(&img, bx, by, cx, cy, 0xFFFF0000, 1);
         ppm::draw_line(&img, cx, cy, ax, ay, 0xFFFF0000, 1);
+    }
+
+    // Draw polygon boundary LAST (thick black) — overlays matching triangle edges
+    for (usz i = 0; i < polygon.len; i++) {
+        usz j = (i + 1) % polygon.len;
+        ppm::draw_line(&img,
+            map_x(polygon[i].x, wx, ww, width), map_y(polygon[i].y, wy, wh, height),
+            map_x(polygon[j].x, wx, ww, width), map_y(polygon[j].y, wy, wh, height),
+            0xFF000000, 2);
     }
 
     // Draw vertices (blue dots)
