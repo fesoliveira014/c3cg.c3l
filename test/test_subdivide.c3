@@ -31,3 +31,16 @@ fn void test_subdivide_quad_mesh_non_triangle() @test
     }
     unreachable();
 }
+
+fn void test_subdivide_tetrahedron() @test
+{
+    HalfEdgeMesh tet = half_edge::from_triangles(mem, TET_POSITIONS[..], TET_INDICES[..])!!;
+    defer tet.destroy();
+
+    HalfEdgeMesh sub = subdivide::loop_subdivide(mem, &tet)!!;
+    defer sub.destroy();
+
+    assert(sub.faces.len == 16);
+    assert(sub.vertices.len == 10);
+    sub.validate()!!;
+}
