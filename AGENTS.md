@@ -200,8 +200,8 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 | M8        | Convex hull 3D (incremental)                                 | ✅ Complete |
 | M9        | Delaunay 2D (delaunator)                                     | ✅ Complete |
 | M10       | Voronoi from Delaunay (unbounded)                            | ✅ Complete |
-| M11       | Bounded Voronoi (in_polygon, in_box)                         | ✅ Complete | |
-| M12       | Spherical Delaunay + Voronoi                                 | Not started |
+| M11       | Bounded Voronoi (in_polygon, in_box)                         | ✅ Complete |
+| M12       | Spherical Delaunay + Voronoi                                 | ✅ Complete |
 | M13       | Voronoi/Delaunay graph views                                 | Not started |
 | M14       | Polygon triangulation, Loop subdivision, primitives          | Not started |
 
