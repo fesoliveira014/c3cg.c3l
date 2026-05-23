@@ -234,3 +234,47 @@ fn void      fill(PpmImage* img, uint color);
 fn void      draw_line(PpmImage* img, int x0, int y0, int x1, int y1, uint color, uint line_width = 1);
 fn void      draw_circle(PpmImage* img, int cx, int cy, uint radius, uint color, bool fill = true, uint line_width = 1);
 fn void      write_ppm(PpmImage* img, char[] path) ;
+
+module cg::graph;
+import cg;
+
+struct VoronoiGraph {
+    Vec3f[]       vertices;
+    Vec3f[]       sites;
+    Vec3f[]       centroids;
+    int[]         cell_offsets;
+    VertexIndex[] ring_indices;
+    FaceIndex[]   neighbor_indices;
+}
+
+struct VoronoiCellView {
+    FaceIndex     index;
+    Vec3f         site;
+    Vec3f         centroid;
+    VertexIndex[] ring;
+    FaceIndex[]   neighbors;
+}
+
+fn VoronoiGraph?   from_voronoi(Allocator alloc, VoronoiDiagram* diagram);
+
+struct DelaunayTriangle {
+    VertexIndex[3] vertices;
+    FaceIndex[3]   neighbors;
+}
+
+struct DelaunayGraph {
+    Vec3f[]            vertices;
+    Vec3f[]            circumcenters;
+    DelaunayTriangle[] triangles;
+}
+
+struct DelaunayTriangleView {
+    FaceIndex      index;
+    Vec3f          circumcenter;
+    VertexIndex[3] vertices;
+    FaceIndex[3]   neighbors;
+}
+
+fn DelaunayGraph?         from_delaunay(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] circumcenters);
+fn DelaunayGraph?         from_planar_delaunay(Allocator alloc, HalfEdgeMesh* mesh);
+fn DelaunayGraph?         from_spherical_delaunay(Allocator alloc, HalfEdgeMesh* mesh, float radius);
