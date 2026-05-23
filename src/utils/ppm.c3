@@ -51,8 +51,8 @@ fn void draw_line(PpmImage* img, int x0, int y0, int x1, int y1, uint color, uin
     int step_x = 0;
     int step_y = 0;
     if (len > 0.5f) {
-        step_x = (int)((float)perp_x / len + 0.5f);
-        step_y = (int)((float)perp_y / len + 0.5f);
+        step_x = (int)math::round((float)perp_x / len);
+        step_y = (int)math::round((float)perp_y / len);
     }
 
     int err = dx + dy;
@@ -60,9 +60,10 @@ fn void draw_line(PpmImage* img, int x0, int y0, int x1, int y1, uint color, uin
     int cy = y0;
     while (true) {
         // Draw perpendicular offsets for line width
-        int hw = (int)(line_width / 2);
-        for (int w = -hw; w <= hw; w++) {
-            set_pixel(img, cx + w * step_x, cy + w * step_y, color);
+        int hw = (int)line_width;
+        int offset_start = -(hw - 1) / 2;
+        for (int w = 0; w < hw; w++) {
+            set_pixel(img, cx + (offset_start + w) * step_x, cy + (offset_start + w) * step_y, color);
         }
         if (cx == x1 && cy == y1) break;
         int e2 = 2 * err;
