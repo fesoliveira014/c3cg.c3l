@@ -4,8 +4,8 @@ import cg::triangulate;
 import cg::utils;
 import cg::utils::ppm;
 
-fn int map_x(float x, float wx, float ww) { return (int)((x - wx) / ww); }
-fn int map_y(float y, float wy, float wh) { return (int)((wy - y) / wh); }
+fn int map_x(float x, float wx, float ww, uint w) { return (int)((x - wx) / ww * (float)w); }
+fn int map_y(float y, float wy, float wh, uint h) { return (int)((wy - y) / wh * (float)h); }
 
 fn void main()
 {
@@ -62,8 +62,8 @@ fn void main()
     for (usz i = 0; i < polygon.len; i++) {
         usz j = (i + 1) % polygon.len;
         ppm::draw_line(&img,
-            map_x(polygon[i].x, wx, ww), map_y(polygon[i].y, wy, wh),
-            map_x(polygon[j].x, wx, ww), map_y(polygon[j].y, wy, wh),
+            map_x(polygon[i].x, wx, ww, width), map_y(polygon[i].y, wy, wh, height),
+            map_x(polygon[j].x, wx, ww, width), map_y(polygon[j].y, wy, wh, height),
             0xFF000000, 2);
     }
 
@@ -72,22 +72,22 @@ fn void main()
         int a = tri_indices[t];
         int b = tri_indices[(usz)(t + 1)];
         int c = tri_indices[(usz)(t + 2)];
-        int ax = map_x(polygon[a].x, wx, ww);
-        int ay = map_y(polygon[a].y, wy, wh);
-        int bx = map_x(polygon[b].x, wx, ww);
-        int by = map_y(polygon[b].y, wy, wh);
-        int cx = map_x(polygon[c].x, wx, ww);
-        int cy = map_y(polygon[c].y, wy, wh);
+        int ax = map_x(polygon[a].x, wx, ww, width);
+        int ay = map_y(polygon[a].y, wy, wh, height);
+        int bx = map_x(polygon[b].x, wx, ww, width);
+        int by = map_y(polygon[b].y, wy, wh, height);
+        int cx = map_x(polygon[c].x, wx, ww, width);
+        int cy = map_y(polygon[c].y, wy, wh, height);
         ppm::draw_line(&img, ax, ay, bx, by, 0xFFFF0000, 1);
         ppm::draw_line(&img, bx, by, cx, cy, 0xFFFF0000, 1);
         ppm::draw_line(&img, cx, cy, ax, ay, 0xFFFF0000, 1);
     }
 
-    // Draw vertices (red dots)
+    // Draw vertices (blue dots)
     for (usz i = 0; i < polygon.len; i++) {
         ppm::draw_circle(&img,
-            map_x(polygon[i].x, wx, ww), map_y(polygon[i].y, wy, wh),
-            4, 0xFFFF0000, true, 1);
+            map_x(polygon[i].x, wx, ww, width), map_y(polygon[i].y, wy, wh, height),
+            5, 0xFF0000FF, true, 1);
     }
 
     ppm::write_ppm(&img, "triangulate_polygon.ppm");
