@@ -32,6 +32,11 @@
       "opt": "O3",
       "sources": ["src/**", "scripts/random_voronoi.c3"]
     },
+    "loop-subdivide": {
+      "type": "executable",
+      "opt": "O3",
+      "sources": ["src/**", "scripts/loop_subdivide.c3"]
+    },
     "triangulate-polygon": {
       "type": "executable",
       "opt": "O3",
