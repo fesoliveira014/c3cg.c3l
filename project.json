@@ -31,6 +31,11 @@
       "type": "executable",
       "opt": "O3",
       "sources": ["src/**", "scripts/random_voronoi.c3"]
+    },
+    "triangulate-polygon": {
+      "type": "executable",
+      "opt": "O3",
+      "sources": ["src/**", "scripts/triangulate_polygon.c3"]
     }
   }
 }
