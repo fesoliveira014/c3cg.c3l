@@ -95,6 +95,7 @@ fn Vec3f[]? circumcenters_on_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, flo
 
 fn Vec3f? face_centroid(HalfEdgeMesh* mesh, FaceIndex face);
 fn Vec3f[]? face_centroids(Allocator alloc, HalfEdgeMesh* mesh);
+fn Vec3f[]? centroids_on_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, float radius);
 
 // ── cg::half_edge ───────────────────────────────────────────
 
@@ -179,6 +180,8 @@ fn VoronoiDiagram? from_delaunay(Allocator alloc, HalfEdgeMesh* delaunay);
 fn HalfEdgeMesh? to_delaunay(Allocator alloc, VoronoiDiagram* diagram);
 fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon);
 fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox);
+fn VoronoiDiagram? voronoi_on_sphere(Allocator alloc, Vec3f[] points, float radius);
+fn VoronoiDiagram? voronoi_dual_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, Vec3f[] spatial_points);
 
 module cg::delaunay;
 import cg;
@@ -189,6 +192,7 @@ struct DelaunayOptions {
 }
 
 fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions options = {});
+fn HalfEdgeMesh? delaunay_on_sphere(Allocator alloc, Vec3f[] points, float radius);
 
 module cg::utils;
 import cg;
