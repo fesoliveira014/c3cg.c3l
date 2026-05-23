@@ -21,3 +21,14 @@ fn void test_triangulate_duplicate_vertices() @test
     }
     unreachable();
 }
+
+fn void test_triangulate_triangle() @test
+{
+    Vec3f[3] tri = { {0,0,0}, {1,0,0}, {0,1,0} };
+    int[] indices = triangulate::triangulate_polygon(mem, tri[..])!!;
+    defer free(indices);
+    assert(indices.len == 3);
+    assert(indices[0] == 0);
+    assert(indices[1] == 1);
+    assert(indices[2] == 2);
+}
