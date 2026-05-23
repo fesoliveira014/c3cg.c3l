@@ -68,7 +68,9 @@ faultdef
     OPEN_CELL_ON_BOUNDARY,
     DUAL_REQUIRES_CLOSED_MESH,
     DUAL_VERTEX_COUNT_MISMATCH,
-    NON_CONVEX_BOUNDING_POLYGON;
+    NON_CONVEX_BOUNDING_POLYGON,
+    INSUFFICIENT_VERTICES,
+    NON_SIMPLE_POLYGON;
 
 // ── cg::geometry ────────────────────────────────────────────
 
