@@ -34,13 +34,63 @@ fn VoronoiCellView VoronoiGraph.cell(&self, FaceIndex c)
 fn VoronoiGraph? from_voronoi(Allocator alloc, VoronoiDiagram* diagram)
 {
     if (diagram.mesh.faces.len == 0) return cg::EMPTY_INPUT~;
+    if (diagram.sites.len == 0) return cg::EMPTY_INPUT~;
+    diagram.mesh.validate()!;
+
+    Vec3f[] sites = copy_sites(alloc, diagram)!;
+    Vec3f[] centroids = geometry::face_centroids(alloc, &diagram.mesh)!;
+    Vec3f[] vertices = copy_positions(alloc, &diagram.mesh)!;
+
+    usz cell_count = diagram.mesh.faces.len;
+
+    usz total_ring_entries = 0;
+    for (usz f = 0; f < cell_count; f++) {
+        int deg = diagram.mesh.face_degree((FaceIndex)(int)f);
+        total_ring_entries += (usz)deg;
+    }
+
+    int[] cell_offsets = mem::alloc::new_array(alloc, int, (sz)(cell_count + 1));
+    VertexIndex[] ring_indices = mem::alloc::new_array(alloc, VertexIndex, (sz)total_ring_entries);
+    FaceIndex[] neighbor_indices = mem::alloc::new_array(alloc, FaceIndex, (sz)total_ring_entries);
+
+    usz max_deg = 0;
+    for (usz f = 0; f < cell_count; f++) {
+        int deg = diagram.mesh.face_degree((FaceIndex)(int)f);
+        if ((usz)deg > max_deg) max_deg = (usz)deg;
+    }
+
+    HeIndex[] he_scratch = mem::alloc::new_array(alloc, HeIndex, (sz)max_deg);
+    defer free(he_scratch);
+
+    cell_offsets[0] = 0;
+    for (usz f = 0; f < cell_count; f++) {
+        FaceIndex face = (FaceIndex)(int)f;
+        int deg = diagram.mesh.face_degree(face);
+        diagram.mesh.face_half_edges(face, he_scratch[..(usz)deg])!;
+        usz offset = (usz)cell_offsets[f];
+
+        for (int i = 0; i < deg; i++) {
+            HeIndex he = he_scratch[i];
+            ring_indices[offset + (usz)i] = diagram.mesh.from_vertex(he);
+
+            if (diagram.mesh.is_boundary(he)) {
+                neighbor_indices[offset + (usz)i] = cg::INVALID_FACE;
+            } else {
+                HeIndex twin = diagram.mesh.twin(he);
+                neighbor_indices[offset + (usz)i] = diagram.mesh.face_of(twin);
+            }
+        }
+
+        cell_offsets[f + 1] = cell_offsets[f] + deg;
+    }
+
     VoronoiGraph g;
-    g.sites = copy_sites(alloc, diagram)!;
-    g.centroids = geometry::face_centroids(alloc, &diagram.mesh)!;
-    g.vertices = copy_positions(alloc, &diagram.mesh)!;
-    g.cell_offsets = alloc_offsets(alloc, (usz)g.sites.len)!;
-    g.ring_indices = {};
-    g.neighbor_indices = {};
+    g.vertices         = vertices;
+    g.sites            = sites;
+    g.centroids        = centroids;
+    g.cell_offsets     = cell_offsets;
+    g.ring_indices     = ring_indices;
+    g.neighbor_indices = neighbor_indices;
     return g;
 }
 
@@ -57,12 +107,5 @@ fn Vec3f[]? copy_positions(Allocator alloc, HalfEdgeMesh* mesh)
 {
     Vec3f[] out = mem::alloc::new_array(alloc, Vec3f, (sz)mesh.positions.len);
     for (usz i = 0; i < mesh.positions.len; i++) out[i] = mesh.positions[i];
-    return out;
-}
-
-fn int[]? alloc_offsets(Allocator alloc, usz cell_count)
-{
-    int[] out = mem::alloc::new_array(alloc, int, (sz)(cell_count + 1));
-    for (usz i = 0; i <= cell_count; i++) out[i] = 0;
     return out;
 }
