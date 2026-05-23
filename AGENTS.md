@@ -203,7 +203,7 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 | M11       | Bounded Voronoi (in_polygon, in_box)                         | ✅ Complete |
 | M12       | Spherical Delaunay + Voronoi                                 | ✅ Complete |
 | M13       | Voronoi/Delaunay graph views                                 | ✅ Complete |
-| M14       | Polygon triangulation, Loop subdivision, primitives          | Not started |
+| M14       | Polygon triangulation, Loop subdivision, primitives          | ✅ Complete |
 
 Each milestone = commit(s) with tests. `c3c build && c3c test` green at every boundary.
 
