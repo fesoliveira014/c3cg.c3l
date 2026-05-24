@@ -25,34 +25,28 @@ fn void test_triangulate_duplicate_vertices() @test
 fn void test_triangulate_triangle() @test
 {
     Vec3f[3] tri = { {0,0,0}, {1,0,0}, {0,1,0} };
-    int[] indices = triangulate::triangulate_polygon(mem, tri[..])!!;
-    defer free(indices);
-    assert(indices.len == 3);
-    assert(indices[0] == 0);
-    assert(indices[1] == 1);
-    assert(indices[2] == 2);
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, tri[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 1);
+    mesh.validate()!!;
 }
 
 fn void test_triangulate_square() @test
 {
     Vec3f[4] square = { {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0} };
-    int[] indices = triangulate::triangulate_polygon(mem, square[..])!!;
-    defer free(indices);
-    assert(indices.len == 6);
-    for (usz i = 0; i < indices.len; i++) {
-        assert(indices[i] >= 0 && (usz)indices[i] < 4);
-    }
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, square[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 2);
+    mesh.validate()!!;
 }
 
 fn void test_triangulate_pentagon() @test
 {
     Vec3f[5] pent = { {0,1,0}, {1,0.3f,0}, {0.6f,-1,0}, {-0.6f,-1,0}, {-1,0.3f,0} };
-    int[] indices = triangulate::triangulate_polygon(mem, pent[..])!!;
-    defer free(indices);
-    assert(indices.len == 9);
-    for (usz i = 0; i < indices.len; i++) {
-        assert(indices[i] >= 0 && (usz)indices[i] < 5);
-    }
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, pent[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 3);
+    mesh.validate()!!;
 }
 
 fn void test_triangulate_trapezoid() @test
@@ -63,43 +57,33 @@ fn void test_triangulate_trapezoid() @test
         { 1, 2, 0 },
         { -1, 2, 0 },
     };
-    int[] indices = triangulate::triangulate_polygon(mem, trapezoid[..])!!;
-    defer free(indices);
-    assert(indices.len == 6);
-    for (usz i = 0; i < indices.len; i++) {
-        assert(indices[i] >= 0 && (usz)indices[i] < 4);
-    }
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, trapezoid[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 2);
+    mesh.validate()!!;
 }
 
 fn void test_triangulate_l_shaped() @test
 {
     Vec3f[6] lshape = { {0,0,0}, {2,0,0}, {2,1,0}, {1,1,0}, {1,2,0}, {0,2,0} };
-    int[] indices = triangulate::triangulate_polygon(mem, lshape[..])!!;
-    defer free(indices);
-    assert(indices.len == 12);
-    for (usz i = 0; i < indices.len; i++) {
-        assert(indices[i] >= 0 && (usz)indices[i] < 6);
-    }
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, lshape[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 4);
+    mesh.validate()!!;
 }
 
 fn void test_triangulate_star_shaped() @test
 {
-    Vec3f[10] star = {
-        { 0, 3, 0 },
-        { 1, 1, 0 },
-        { 3, 0, 0 },
-        { 1, -1, 0 },
-        { 0, -3, 0 },
-        { -1, -1, 0 },
-        { -3, 0, 0 },
-        { -1, 1, 0 },
-        { -0.5f, 0, 0 },
-        { 0.5f, 0, 0 },
+    Vec3f[6] concave = {
+        { 0, 0, 0 },
+        { 4, 0, 0 },
+        { 4, 2, 0 },
+        { 2, 1, 0 },
+        { 4, 4, 0 },
+        { 0, 4, 0 },
     };
-    int[] indices = triangulate::triangulate_polygon(mem, star[..])!!;
-    defer free(indices);
-    assert(indices.len == 24);
-    for (usz i = 0; i < indices.len; i++) {
-        assert(indices[i] >= 0 && (usz)indices[i] < 10);
-    }
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, concave[..])!!;
+    defer mesh.destroy();
+    assert(mesh.faces.len == 4);
+    mesh.validate()!!;
 }

@@ -1,6 +1,7 @@
 module cg::triangulate;
 import cg;
 import cg::geometry;
+import cg::half_edge;
 import std::sort;
 
 const float TRIANGULATE_EPSILON = 0.00001f;
@@ -319,22 +320,22 @@ fn PieceList extract_monotone_sub_polygons(Allocator alloc, Vec3f[] polygon, Dia
     return pieces;
 }
 
-fn usz append_triangle(Vec3f[] polygon, int[] out_indices, usz out_count, int a, int b, int c)
+fn usz append_triangle(Vec3f[] polygon, uint[] out_indices, usz out_count, int a, int b, int c)
 {
     if (geometry::orient_2d(xy(polygon[(usz)a]), xy(polygon[(usz)b]), xy(polygon[(usz)c])) == geometry::PREDICATE_NEGATIVE) {
         int tmp = b;
         b = c;
         c = tmp;
     }
-    out_indices[out_count] = a;
-    out_indices[out_count + (usz)1] = b;
-    out_indices[out_count + (usz)2] = c;
+    out_indices[out_count] = (uint)a;
+    out_indices[out_count + (usz)1] = (uint)b;
+    out_indices[out_count + (usz)2] = (uint)c;
     return out_count + (usz)3;
 }
 
 fn bool same_chain(bool[] chain, int a, int b) { return chain[(usz)a] == chain[(usz)b]; }
 
-fn usz triangulate_monotone_piece(Allocator alloc, Vec3f[] polygon, int[] piece, int[] out_indices, usz out_count)
+fn usz triangulate_monotone_piece(Allocator alloc, Vec3f[] polygon, int[] piece, uint[] out_indices, usz out_count)
 {
     if (piece.len == (usz)3) return append_triangle(polygon, out_indices, out_count, piece[0], piece[1], piece[2]);
 
@@ -402,7 +403,7 @@ fn usz triangulate_monotone_piece(Allocator alloc, Vec3f[] polygon, int[] piece,
     return out_count;
 }
 
-fn int[]? triangulate_polygon(Allocator alloc, Vec3f[] polygon)
+fn HalfEdgeMesh? triangulate_polygon(Allocator alloc, Vec3f[] polygon)
 {
     if (polygon.len < (usz)3) return cg::INSUFFICIENT_VERTICES~;
 
@@ -423,7 +424,8 @@ fn int[]? triangulate_polygon(Allocator alloc, Vec3f[] polygon)
     }
 
     int n = (int)polygon.len;
-    int[] out_indices = mem::alloc::new_array(alloc, int, (sz)((n - 2) * 3));
+    uint[] out_indices = mem::alloc::new_array(alloc, uint, (sz)((n - 2) * 3));
+    defer free(out_indices);
 
     DiagonalList diagonals;
     diagonals.pairs = mem::alloc::new_array(alloc, int, (sz)(n * 4));
@@ -442,5 +444,5 @@ fn int[]? triangulate_polygon(Allocator alloc, Vec3f[] polygon)
         usz len = pieces.lengths[p];
         out_count = triangulate_monotone_piece(alloc, polygon, pieces.values[offset : len], out_indices, out_count);
     }
-    return out_indices[:out_count];
+    return half_edge::from_triangles(alloc, polygon, out_indices[:out_count]);
 }

@@ -22,8 +22,8 @@ fn void main()
     };
 
     // Triangulate
-    int[] tri_indices = triangulate::triangulate_polygon(mem, polygon[..])!!;
-    defer free(tri_indices);
+    HalfEdgeMesh mesh = triangulate::triangulate_polygon(mem, polygon[..])!!;
+    defer mesh.destroy();
 
     // Compute bounding box
     float min_x = polygon[0].x;
@@ -57,10 +57,11 @@ fn void main()
     ppm::fill(&img, 0xFFFFFFFF);
 
     // Draw triangulation edges FIRST (thin red) — boundary will overlay later
-    for (usz t = 0; t < tri_indices.len; t += 3) {
-        int a = tri_indices[t];
-        int b = tri_indices[(usz)(t + 1)];
-        int c = tri_indices[(usz)(t + 2)];
+    for (FaceIndex f = (FaceIndex)0; (int)f < (int)mesh.faces.len; f++) {
+        HeIndex he = mesh.faces[(usz)f].half_edge;
+        int a = (int)mesh.from_vertex(he);
+        int b = (int)mesh.to_vertex(he);
+        int c = (int)mesh.from_vertex(mesh.prev(he));
         int ax = map_x(polygon[a].x, wx, ww, width);
         int ay = map_y(polygon[a].y, wy, wh, height);
         int bx = map_x(polygon[b].x, wx, ww, width);

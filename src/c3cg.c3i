@@ -283,7 +283,7 @@ fn DelaunayGraph?         from_spherical_delaunay(Allocator alloc, HalfEdgeMesh*
 
 module cg::triangulate;
 import cg;
-fn int[]? triangulate_polygon(Allocator alloc, Vec3f[] polygon);
+fn HalfEdgeMesh? triangulate_polygon(Allocator alloc, Vec3f[] polygon);
 
 module cg::subdivide;
 import cg;
