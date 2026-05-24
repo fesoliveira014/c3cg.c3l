@@ -18,17 +18,17 @@ fn VoronoiDiagram? voronoi_on_sphere(Allocator alloc, Vec3f[] points, float radi
 
     HalfEdgeMesh voronoi_mesh = dual::dual_from_vertices(alloc, &tri_mesh, centers)!;
 
-    Vec3f[] sites = mem::alloc::new_array(alloc, Vec3f, (sz)points.len);
+    Vec3f[] sites = mem::alloc::new_array(alloc, Vec3f, (sz)tri_mesh.positions.len);
     defer catch {
         voronoi_mesh.destroy();
         free(sites);
     };
-    for (usz i = 0; i < points.len; i++) sites[i] = points[i];
+    for (usz i = 0; i < tri_mesh.positions.len; i++) sites[i] = tri_mesh.positions[i];
 
-    VoronoiDiagram diagram;
-    diagram.mesh = voronoi_mesh;
-    diagram.sites = sites;
-    return diagram;
+    return {
+        .mesh = voronoi_mesh,
+        .sites = sites,
+    };
 }
 
 fn VoronoiDiagram? voronoi_dual_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, Vec3f[] spatial_points)
@@ -42,8 +42,8 @@ fn VoronoiDiagram? voronoi_dual_sphere(Allocator alloc, HalfEdgeMesh* tri_mesh, 
     };
     for (usz i = 0; i < spatial_points.len; i++) sites[i] = spatial_points[i];
 
-    VoronoiDiagram diagram;
-    diagram.mesh = voronoi_mesh;
-    diagram.sites = sites;
-    return diagram;
+    return {
+        .mesh = voronoi_mesh,
+        .sites = sites,
+    };
 }

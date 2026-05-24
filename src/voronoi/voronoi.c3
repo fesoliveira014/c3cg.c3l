@@ -34,10 +34,10 @@ fn VoronoiDiagram? from_delaunay(Allocator alloc, HalfEdgeMesh* delaunay)
         sites[i] = delaunay.positions[i];
     }
 
-    VoronoiDiagram diagram;
-    diagram.mesh = mesh;
-    diagram.sites = sites;
-    return diagram;
+    return {
+        .mesh = mesh,
+        .sites = sites,
+    };
 }
 
 fn HalfEdgeMesh? to_delaunay(Allocator alloc, VoronoiDiagram* diagram)

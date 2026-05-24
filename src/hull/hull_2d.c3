@@ -12,8 +12,8 @@ struct SortCtx {
 
 fn int compare_by_position(int a, int b, SortCtx ctx)
 {
-    Vec3f va = ctx.positions[a];
-    Vec3f vb = ctx.positions[b];
+    Vec3f va = ctx.positions[(usz)a];
+    Vec3f vb = ctx.positions[(usz)b];
     if (va.x < vb.x) return -1;
     if (va.x > vb.x) return 1;
     if (va.y < vb.y) return -1;
@@ -39,7 +39,7 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
         if (dedup_len > 0) {
             int prev = indices[dedup_len - 1];
             int curr = indices[i];
-            if (positions[prev].x == positions[curr].x && positions[prev].y == positions[curr].y) {
+            if (positions[(usz)prev].x == positions[(usz)curr].x && positions[(usz)prev].y == positions[(usz)curr].y) {
                 continue;
             }
         }
@@ -55,12 +55,12 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
 
     for (usz i = 0; i < dedup_len; i++) {
         int p = indices[i];
-        Vec2f p2 = { positions[p].x, positions[p].y };
+        Vec2f p2 = { positions[(usz)p].x, positions[(usz)p].y };
         while (hull_len >= 2) {
             int a = hull[hull_len - 2];
             int b = hull[hull_len - 1];
-            Vec2f a2 = { positions[a].x, positions[a].y };
-            Vec2f b2 = { positions[b].x, positions[b].y };
+            Vec2f a2 = { positions[(usz)a].x, positions[(usz)a].y };
+            Vec2f b2 = { positions[(usz)b].x, positions[(usz)b].y };
             if (geometry::orient_2d(a2, b2, p2, HULL_EPSILON) != geometry::PREDICATE_NEGATIVE) break;
             hull_len--;
         }
@@ -71,12 +71,12 @@ fn int[]? hull_2d(Allocator alloc, Vec3f[] positions)
     // Phase 3 — upper hull (right-to-left sweep, skip rightmost point).
     for (int i = (int)dedup_len - 1; i > 0; i--) {
         int p = indices[i - 1];
-        Vec2f p2 = { positions[p].x, positions[p].y };
+        Vec2f p2 = { positions[(usz)p].x, positions[(usz)p].y };
         while (hull_len >= 2) {
             int a = hull[hull_len - 2];
             int b = hull[hull_len - 1];
-            Vec2f a2 = { positions[a].x, positions[a].y };
-            Vec2f b2 = { positions[b].x, positions[b].y };
+            Vec2f a2 = { positions[(usz)a].x, positions[(usz)a].y };
+            Vec2f b2 = { positions[(usz)b].x, positions[(usz)b].y };
             if (geometry::orient_2d(a2, b2, p2, HULL_EPSILON) != geometry::PREDICATE_NEGATIVE) break;
             hull_len--;
         }

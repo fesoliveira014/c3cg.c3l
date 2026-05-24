@@ -37,7 +37,7 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
     } else if (options.normal_mode == (uint)RenderNormalMode.RENDER_NORMAL_SMOOTH) {
         data.normals = mem::alloc::new_array(alloc, Vec3f, (sz) mesh.positions.len);
     } else {
-        data.normals = mem::alloc::new_array(alloc, Vec3f, 0);
+        data.normals = mem::alloc::new_array(alloc, Vec3f, (sz)0);
     }
     defer catch free(data.normals);
 
@@ -46,7 +46,7 @@ fn RenderingData? build_shared_rendering_data(HalfEdgeMesh* mesh, Allocator allo
         options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
         data.uvs = mem::alloc::new_array(alloc, Vec2f, (sz) mesh.positions.len);
     } else {
-        data.uvs = mem::alloc::new_array(alloc, Vec2f, 0);
+        data.uvs = mem::alloc::new_array(alloc, Vec2f, (sz)0);
     }
     defer catch free(data.uvs);
 
@@ -107,7 +107,7 @@ fn RenderingData? build_flat_rendering_data(HalfEdgeMesh* mesh, Allocator alloc,
         options.uv_mode == (uint)RenderUvMode.RENDER_UV_PLANAR_PROJECT) {
         data.uvs = mem::alloc::new_array(alloc, Vec2f, (sz) expanded_count);
     } else {
-        data.uvs = mem::alloc::new_array(alloc, Vec2f, 0);
+        data.uvs = mem::alloc::new_array(alloc, Vec2f, (sz)0);
     }
     defer catch free(data.uvs);
 

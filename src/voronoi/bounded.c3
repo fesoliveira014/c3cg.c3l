@@ -178,10 +178,10 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
     }
 
     if (inside_count == 0) {
-        VoronoiDiagram result;
-        result.mesh = {};
-        result.sites = {};
-        return result;
+        return {
+            .mesh = {},
+            .sites = {},
+        };
     }
 
     if (inside_count == 1) {
@@ -193,21 +193,21 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
         defer free(face_indices);
         for (usz i = 0; i < polygon.len; i++) face_indices[i] = (uint)i;
 
-        uint[] face_offsets = mem::alloc::new_array(alloc, uint, 2);
+        uint[] face_offsets = mem::alloc::new_array(alloc, uint, (sz)2);
         defer free(face_offsets);
         face_offsets[0] = 0;
         face_offsets[1] = (uint)polygon.len;
 
         HalfEdgeMesh mesh = half_edge::from_polygons(alloc, positions, face_offsets, face_indices)!;
 
-        Vec3f[] result_sites = mem::alloc::new_array(alloc, Vec3f, 1);
+        Vec3f[] result_sites = mem::alloc::new_array(alloc, Vec3f, (sz)1);
         defer catch { mesh.destroy(); free(result_sites); };
         result_sites[0] = inside_sites[0];
 
-        VoronoiDiagram result;
-        result.mesh = mesh;
-        result.sites = result_sites;
-        return result;
+        return {
+            .mesh = mesh,
+            .sites = result_sites,
+        };
     }
 
     if (inside_count == 2) {
@@ -221,10 +221,10 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
         if (poly1.len >= 3) n_cells++;
 
         if (n_cells == 0) {
-            VoronoiDiagram result;
-            result.mesh = {};
-            result.sites = {};
-            return result;
+            return {
+                .mesh = {},
+                .sites = {},
+            };
         }
 
         usz total_verts = 0;
@@ -268,10 +268,10 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
         if (poly0.len >= 3) { result_sites[site_idx] = inside_sites[0]; site_idx++; }
         if (poly1.len >= 3) { result_sites[site_idx] = inside_sites[1]; }
 
-        VoronoiDiagram result;
-        result.mesh = mesh;
-        result.sites = result_sites;
-        return result;
+        return {
+            .mesh = mesh,
+            .sites = result_sites,
+        };
     }
 
 
@@ -427,10 +427,10 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
     }
 
     if (n_surviving == 0) {
-        VoronoiDiagram result;
-        result.mesh = {};
-        result.sites = {};
-        return result;
+        return {
+            .mesh = {},
+            .sites = {},
+        };
     }
 
     // Build output mesh from surviving Voronoi cells
@@ -497,10 +497,10 @@ fn VoronoiDiagram? in_polygon(Allocator alloc, Vec3f[] sites, Vec3f[] polygon)
     for (usz i = 0; i < n_surviving; i++) final_sites[i] = result_sites[i];
     free(result_sites);
 
-    VoronoiDiagram result;
-    result.mesh = mesh;
-    result.sites = final_sites;
-    return result;
+    return {
+        .mesh = mesh,
+        .sites = final_sites,
+    };
 }
 
 fn VoronoiDiagram? in_box(Allocator alloc, Vec3f[] sites, Aabb bbox)

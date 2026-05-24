@@ -70,7 +70,8 @@ faultdef
     DUAL_VERTEX_COUNT_MISMATCH,
     NON_CONVEX_BOUNDING_POLYGON,
     INSUFFICIENT_VERTICES,
-    NON_SIMPLE_POLYGON;
+    NON_SIMPLE_POLYGON,
+    PPM_WRITE_FAILED;
 
 // ── cg::geometry ────────────────────────────────────────────
 
@@ -235,7 +236,7 @@ fn PpmImage? new_ppm(Allocator alloc, uint width, uint height);
 fn void      fill(PpmImage* img, uint color);
 fn void      draw_line(PpmImage* img, int x0, int y0, int x1, int y1, uint color, uint line_width = 1);
 fn void      draw_circle(PpmImage* img, int cx, int cy, uint radius, uint color, bool fill = true, uint line_width = 1);
-fn void      write_ppm(PpmImage* img, char[] path) ;
+fn void?     write_ppm(PpmImage* img, ZString path);
 
 module cg::graph;
 import cg;

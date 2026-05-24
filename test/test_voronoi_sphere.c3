@@ -76,7 +76,7 @@ fn void test_voronoi_on_sphere_radius_preservation() @test
         float z = diagram.sites[i].z;
         float r2 = x * x + y * y + z * z;
         float r = (float)math::sqrt((double)r2);
-        assert(approx_abs(r - 1.0f) < SPHERE_EPSILON);
+        assert(approx_abs(r - 5.0f) < SPHERE_EPSILON);
     }
 }
 

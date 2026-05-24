@@ -38,11 +38,13 @@ fn HalfEdgeMesh? loop_subdivide(Allocator alloc, HalfEdgeMesh* mesh)
     Vec3f[] new_positions = mem::alloc::new_array(alloc, Vec3f, (sz)new_v_count);
     defer free(new_positions);
 
+    HeIndex[] ring = mem::alloc::new_array(alloc, HeIndex, (sz)he_count);
+    defer free(ring);
+
     // Compute updated vertex positions (Loop formula)
     for (usz vi = 0; vi < v_count; vi++) {
         VertexIndex v = (VertexIndex)(int)vi;
-        HeIndex[64] ring;
-        int n = mesh.vertex_one_ring_outgoing(v, ring[..])!!;
+        int n = mesh.vertex_one_ring_outgoing(v, ring)!;
 
         if (n <= 2) {
             new_positions[vi] = mesh.positions[vi];

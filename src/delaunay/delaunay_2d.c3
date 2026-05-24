@@ -95,12 +95,12 @@ struct DistCtx { float[] dists; Vec3f[] positions; }
 
 fn int compare_by_dist(int a, int b, DistCtx ctx)
 {
-    if (ctx.dists[a] < ctx.dists[b]) { return -1; }
-    if (ctx.dists[a] > ctx.dists[b]) { return 1; }
-    if (ctx.positions[a].x < ctx.positions[b].x) { return -1; }
-    if (ctx.positions[a].x > ctx.positions[b].x) { return 1; }
-    if (ctx.positions[a].y < ctx.positions[b].y) { return -1; }
-    if (ctx.positions[a].y > ctx.positions[b].y) { return 1; }
+    if (ctx.dists[(usz)a] < ctx.dists[(usz)b]) { return -1; }
+    if (ctx.dists[(usz)a] > ctx.dists[(usz)b]) { return 1; }
+    if (ctx.positions[(usz)a].x < ctx.positions[(usz)b].x) { return -1; }
+    if (ctx.positions[(usz)a].x > ctx.positions[(usz)b].x) { return 1; }
+    if (ctx.positions[(usz)a].y < ctx.positions[(usz)b].y) { return -1; }
+    if (ctx.positions[(usz)a].y > ctx.positions[(usz)b].y) { return 1; }
     return 0;
 }
 
@@ -179,10 +179,10 @@ fn HeIndex legalize(HeIndex start_he, Vec3f[] positions, DelaunayBuilder* b)
             VertexIndex pl = b.triangles[al];
             VertexIndex p1 = b.triangles[bl];
 
-            Vec2f v0 = { positions[(int)p0].x, positions[(int)p0].y };
-            Vec2f vr = { positions[(int)pr].x, positions[(int)pr].y };
-            Vec2f vl = { positions[(int)pl].x, positions[(int)pl].y };
-            Vec2f v1 = { positions[(int)p1].x, positions[(int)p1].y };
+            Vec2f v0 = { positions[(usz)p0].x, positions[(usz)p0].y };
+            Vec2f vr = { positions[(usz)pr].x, positions[(usz)pr].y };
+            Vec2f vl = { positions[(usz)pl].x, positions[(usz)pl].y };
+            Vec2f v1 = { positions[(usz)p1].x, positions[(usz)p1].y };
 
             if (geometry::in_circle_2d(v0, vr, vl, v1) == geometry::PREDICATE_POSITIVE) {
                 b.triangles[he] = p1;
@@ -261,27 +261,28 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     Vec3f center = { (min_x + max_x) * 0.5f, (min_y + max_y) * 0.5f, 0 };
 
     int i0 = find_closest(work_pos, point_count, center, -1);
-    int i1 = find_closest(work_pos, point_count, work_pos[i0], i0, true);
-    if (i0 < 0 || i1 < 0) { return cg::DEGENERATE_INPUT~; }
+    if (i0 < 0) { return cg::DEGENERATE_INPUT~; }
+    int i1 = find_closest(work_pos, point_count, work_pos[(usz)i0], i0, true);
+    if (i1 < 0) { return cg::DEGENERATE_INPUT~; }
 
     int i2 = -1;
     float min_radius = 1e30f;
     for (usz i = 0; i < point_count; i++) {
         if ((int)i == i0 || (int)i == i1) { continue; }
-        if (near_duplicate_xy(work_pos[i], work_pos[i0]) || near_duplicate_xy(work_pos[i], work_pos[i1])) { continue; }
-        float r = circumradius_sq(work_pos[i0], work_pos[i1], work_pos[i]);
+        if (near_duplicate_xy(work_pos[i], work_pos[(usz)i0]) || near_duplicate_xy(work_pos[i], work_pos[(usz)i1])) { continue; }
+        float r = circumradius_sq(work_pos[(usz)i0], work_pos[(usz)i1], work_pos[i]);
         if (r < min_radius) { i2 = (int)i; min_radius = r; }
     }
     if (i2 < 0) { return cg::DEGENERATE_INPUT~; }
 
-    Vec2f s0 = { work_pos[i0].x, work_pos[i0].y };
-    Vec2f s1 = { work_pos[i1].x, work_pos[i1].y };
-    Vec2f s2 = { work_pos[i2].x, work_pos[i2].y };
+    Vec2f s0 = { work_pos[(usz)i0].x, work_pos[(usz)i0].y };
+    Vec2f s1 = { work_pos[(usz)i1].x, work_pos[(usz)i1].y };
+    Vec2f s2 = { work_pos[(usz)i2].x, work_pos[(usz)i2].y };
     if (geometry::orient_2d(s0, s1, s2) <= geometry::PREDICATE_ZERO) {
         int tmp = i1; i1 = i2; i2 = tmp;
     }
 
-    Vec3f seed_center = geometry::circumcenter_planar(work_pos[i0], work_pos[i1], work_pos[i2])!!;
+    Vec3f seed_center = geometry::circumcenter_planar(work_pos[(usz)i0], work_pos[(usz)i1], work_pos[(usz)i2])!;
 
     int[] indices = mem::alloc::new_array(alloc, int, (sz) point_count);
     defer free(indices);
@@ -347,8 +348,8 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         int[3] hull_verts = { i0, i1, i2 };
         for (int hi = 0; hi < 3; hi++) {
             int v = hull_verts[hi];
-            float dx = work_pos[(int)v].x - seed_center.x;
-            float dy = work_pos[(int)v].y - seed_center.y;
+            float dx = work_pos[(usz)v].x - seed_center.x;
+            float dy = work_pos[(usz)v].y - seed_center.y;
             float angle = pseudo_angle(dx, dy);
             usz key = (usz)(angle * (float)hash_len);
             builder.hull_hash[key] = (VertexIndex)v;
@@ -358,18 +359,18 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
     // ── Phase 3: Point insertion ──
     for (usz si = 0; si < point_count; si++) {
         int p = indices[si];
-        if (near_duplicate_xy(work_pos[(int)p], work_pos[i0])
-            || near_duplicate_xy(work_pos[(int)p], work_pos[i1])
-            || near_duplicate_xy(work_pos[(int)p], work_pos[i2])) { continue; }
+        if (near_duplicate_xy(work_pos[(usz)p], work_pos[(usz)i0])
+            || near_duplicate_xy(work_pos[(usz)p], work_pos[(usz)i1])
+            || near_duplicate_xy(work_pos[(usz)p], work_pos[(usz)i2])) { continue; }
 
         if (si > 0) {
             int prev_p = indices[si - 1];
-            if (near_duplicate_xy(work_pos[(int)p], work_pos[(int)prev_p])) { continue; }
+            if (near_duplicate_xy(work_pos[(usz)p], work_pos[(usz)prev_p])) { continue; }
         }
 
         // find_visible_edge(p)
-        float pdx = work_pos[(int)p].x - builder.hull_center.x;
-        float pdy = work_pos[(int)p].y - builder.hull_center.y;
+        float pdx = work_pos[(usz)p].x - builder.hull_center.x;
+        float pdy = work_pos[(usz)p].y - builder.hull_center.y;
         float pa = pseudo_angle(pdx, pdy);
         usz key = fast_mod((usz)(pa * (float)hash_len), hash_len);
         VertexIndex start = cg::INVALID_VERTEX;
@@ -384,14 +385,14 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         VertexIndex e = start;
         VertexIndex q = builder.hull_next[(int)e];
         while (true) {
-            if (near_duplicate_xy(work_pos[(int)p], work_pos[(int)e])
-                || near_duplicate_xy(work_pos[(int)p], work_pos[(int)q])) {
+            if (near_duplicate_xy(work_pos[(usz)p], work_pos[(usz)e])
+                || near_duplicate_xy(work_pos[(usz)p], work_pos[(usz)q])) {
                 e = cg::INVALID_VERTEX;
                 break;
             }
-            Vec2f ve = { work_pos[(int)e].x, work_pos[(int)e].y };
-            Vec2f vq = { work_pos[(int)q].x, work_pos[(int)q].y };
-            Vec2f vp = { work_pos[(int)p].x, work_pos[(int)p].y };
+            Vec2f ve = { work_pos[(usz)e].x, work_pos[(usz)e].y };
+            Vec2f vq = { work_pos[(usz)q].x, work_pos[(usz)q].y };
+            Vec2f vp = { work_pos[(usz)p].x, work_pos[(usz)p].y };
             if (geometry::orient_2d(ve, vq, vp) < geometry::PREDICATE_ZERO) { break; }
             e = q;
             q = builder.hull_next[(int)e];
@@ -410,9 +411,9 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         VertexIndex curr = builder.hull_next[(int)e];
         while (true) {
             VertexIndex qq = builder.hull_next[(int)curr];
-            Vec2f vcurr = { work_pos[(int)curr].x, work_pos[(int)curr].y };
-            Vec2f vqq   = { work_pos[(int)qq].x, work_pos[(int)qq].y };
-            Vec2f vpp   = { work_pos[(int)p].x, work_pos[(int)p].y };
+            Vec2f vcurr = { work_pos[(usz)curr].x, work_pos[(usz)curr].y };
+            Vec2f vqq   = { work_pos[(usz)qq].x, work_pos[(usz)qq].y };
+            Vec2f vpp   = { work_pos[(usz)p].x, work_pos[(usz)p].y };
             if (geometry::orient_2d(vcurr, vqq, vpp) >= geometry::PREDICATE_ZERO) { break; }
 
             t = add_triangle(&builder, curr, (VertexIndex)p, qq,
@@ -431,9 +432,9 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
                 q = builder.hull_prev[(int)e];
                 if (q == cg::INVALID_VERTEX) { break; }
 
-                Vec2f vq = { work_pos[(int)q].x, work_pos[(int)q].y };
-                Vec2f ve = { work_pos[(int)e].x, work_pos[(int)e].y };
-                Vec2f vp = { work_pos[(int)p].x, work_pos[(int)p].y };
+                Vec2f vq = { work_pos[(usz)q].x, work_pos[(usz)q].y };
+                Vec2f ve = { work_pos[(usz)e].x, work_pos[(usz)e].y };
+                Vec2f vp = { work_pos[(usz)p].x, work_pos[(usz)p].y };
                 if (geometry::orient_2d(vq, ve, vp) >= geometry::PREDICATE_ZERO) { break; }
 
                 t = add_triangle(&builder, q, (VertexIndex)p, e,
@@ -457,14 +458,14 @@ fn HalfEdgeMesh? delaunay_2d(Allocator alloc, Vec3f[] positions, DelaunayOptions
         builder.hull_start = e;
 
         // Hash new hull vertices.
-        float pdx2 = work_pos[(int)p].x - builder.hull_center.x;
-        float pdy2 = work_pos[(int)p].y - builder.hull_center.y;
+        float pdx2 = work_pos[(usz)p].x - builder.hull_center.x;
+        float pdy2 = work_pos[(usz)p].y - builder.hull_center.y;
         float angle2 = pseudo_angle(pdx2, pdy2);
         key = (usz)(angle2 * (float)hash_len);
         builder.hull_hash[key] = (VertexIndex)p;
 
-        float edx = work_pos[(int)e].x - builder.hull_center.x;
-        float edy = work_pos[(int)e].y - builder.hull_center.y;
+        float edx = work_pos[(usz)e].x - builder.hull_center.x;
+        float edy = work_pos[(usz)e].y - builder.hull_center.y;
         float e_angle = pseudo_angle(edx, edy);
         key = (usz)(e_angle * (float)hash_len);
         builder.hull_hash[key] = e;

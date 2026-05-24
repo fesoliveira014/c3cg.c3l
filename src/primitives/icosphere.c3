@@ -8,7 +8,7 @@ fn HalfEdgeMesh? icosphere(Allocator alloc, int subdivisions, float radius)
     if (subdivisions < 0) return cg::DEGENERATE_INPUT~;
     if (radius <= 0.0f) return cg::DEGENERATE_INPUT~;
 
-    HalfEdgeMesh mesh = icosahedron(alloc)!!;
+    HalfEdgeMesh mesh = icosahedron(alloc)!;
     if (subdivisions == 0) {
         for (usz vi = 0; vi < mesh.positions.len; vi++) {
             Vec3f p = mesh.positions[vi];
@@ -21,7 +21,7 @@ fn HalfEdgeMesh? icosphere(Allocator alloc, int subdivisions, float radius)
 
     HalfEdgeMesh current = mesh;
     for (int i = 0; i < subdivisions; i++) {
-        HalfEdgeMesh next = subdivide::loop_subdivide(alloc, &current)!!;
+        HalfEdgeMesh next = subdivide::loop_subdivide(alloc, &current)!;
         current.destroy();
         current = next;
     }

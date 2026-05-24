@@ -13,13 +13,14 @@ fn void PpmImage.destroy(&self)
 
 fn PpmImage? new_ppm(Allocator alloc, uint width, uint height)
 {
-    PpmImage img;
-    img.width = width;
-    img.height = height;
-    img.pixels = mem::alloc::new_array(alloc, uint, (sz)((usz)width * (usz)height));
-    defer catch free(img.pixels);
-    for (usz i = 0; i < img.pixels.len; i++) img.pixels[i] = PPM_DEFAULT_BG;
-    return img;
+    uint[] pixels = mem::alloc::new_array(alloc, uint, (sz)((usz)width * (usz)height));
+    defer catch free(pixels);
+    for (usz i = 0; i < pixels.len; i++) pixels[i] = PPM_DEFAULT_BG;
+    return {
+        .width = width,
+        .height = height,
+        .pixels = pixels,
+    };
 }
 
 fn void fill(PpmImage* img, uint color)
@@ -127,18 +128,18 @@ fn void draw_circle(PpmImage* img, int cx, int cy, uint radius, uint color, bool
 }
 
 // write_ppm uses libc for file I/O
-fn void write_ppm(PpmImage* img, char[] path)
+fn void? write_ppm(PpmImage* img, ZString path)
 {
     String header = string::tformat("P6\n%d %d\n255\n", img.width, img.height);
-    ZString path_z = (ZString)path;
-    CFile f = libc::fopen(path_z, "wb");
-    if (!f) return;
+    CFile f = libc::fopen(path, "wb");
+    if (!f) return cg::PPM_WRITE_FAILED~;
     defer libc::fclose(f);
 
-    libc::fwrite((char[])header, 1, (usz)header.len, f);
+    if (libc::fwrite((char[])header, 1, (usz)header.len, f) != (usz)header.len) return cg::PPM_WRITE_FAILED~;
     for (usz i = 0; i < img.pixels.len; i++) {
         uint p = img.pixels[i];
         char[3] rgb = { (char)((p >> 16) & 0xFF), (char)((p >> 8) & 0xFF), (char)(p & 0xFF) };
-        libc::fwrite(&rgb, 1, 3, f);
+        if (libc::fwrite(&rgb, 1, (usz)3, f) != (usz)3) return cg::PPM_WRITE_FAILED~;
     }
+    if (libc::fflush(f) != 0) return cg::PPM_WRITE_FAILED~;
 }

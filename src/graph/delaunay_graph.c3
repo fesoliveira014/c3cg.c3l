@@ -64,11 +64,11 @@ fn DelaunayGraph? from_delaunay(Allocator alloc, HalfEdgeMesh* mesh, Vec3f[] cir
         triangles[f] = { .vertices = verts, .neighbors = neigh };
     }
 
-    DelaunayGraph g;
-    g.vertices      = vertices;
-    g.circumcenters = ccs;
-    g.triangles     = triangles;
-    return g;
+    return {
+        .vertices = vertices,
+        .circumcenters = ccs,
+        .triangles = triangles,
+    };
 }
 
 fn DelaunayGraph? from_planar_delaunay(Allocator alloc, HalfEdgeMesh* mesh)

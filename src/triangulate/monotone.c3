@@ -342,6 +342,7 @@ fn usz triangulate_monotone_piece(Allocator alloc, Vec3f[] polygon, int[] piece,
     int[] sorted = mem::alloc::new_array(alloc, int, (sz)piece.len);
     defer free(sorted);
     bool[] left_chain = mem::alloc::new_array(alloc, bool, (sz)polygon.len);
+    for (usz i = 0; i < left_chain.len; i++) left_chain[i] = false;
     defer free(left_chain);
 
     int top_pos = 0;

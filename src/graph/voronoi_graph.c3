@@ -36,6 +36,7 @@ fn VoronoiGraph? from_voronoi(Allocator alloc, VoronoiDiagram* diagram)
 {
     if (diagram.mesh.faces.len == 0) return cg::EMPTY_INPUT~;
     if (diagram.sites.len == 0) return cg::EMPTY_INPUT~;
+    if (diagram.sites.len != diagram.mesh.faces.len) return cg::DUAL_VERTEX_COUNT_MISMATCH~;
     diagram.mesh.validate()!;
 
     Vec3f[] sites = copy_sites(alloc, diagram)!;
@@ -85,14 +86,14 @@ fn VoronoiGraph? from_voronoi(Allocator alloc, VoronoiDiagram* diagram)
         cell_offsets[f + 1] = cell_offsets[f] + deg;
     }
 
-    VoronoiGraph g;
-    g.vertices         = vertices;
-    g.sites            = sites;
-    g.centroids        = centroids;
-    g.cell_offsets     = cell_offsets;
-    g.ring_indices     = ring_indices;
-    g.neighbor_indices = neighbor_indices;
-    return g;
+    return {
+        .vertices = vertices,
+        .sites = sites,
+        .centroids = centroids,
+        .cell_offsets = cell_offsets,
+        .ring_indices = ring_indices,
+        .neighbor_indices = neighbor_indices,
+    };
 }
 
 // ── internal helpers ──

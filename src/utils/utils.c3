@@ -133,7 +133,7 @@ fn PpmImage? render_delaunay(Allocator alloc, HalfEdgeMesh* mesh, PpmOptions opt
     }
 
     // Create image filled with background color
-    PpmImage img = ppm::new_ppm(alloc, width, height)!!;
+    PpmImage img = ppm::new_ppm(alloc, width, height)!;
     defer catch img.destroy();
     ppm::fill(&img, options.bg_color);
 
@@ -206,7 +206,7 @@ fn PpmImage? render_voronoi(Allocator alloc, VoronoiDiagram* diagram, PpmOptions
         if (height < 1) height = 1;
     }
 
-    PpmImage img = ppm::new_ppm(alloc, width, height)!!;
+    PpmImage img = ppm::new_ppm(alloc, width, height)!;
     defer catch img.destroy();
     ppm::fill(&img, options.bg_color);
 
@@ -311,7 +311,7 @@ fn PpmImage? render_overlay(Allocator alloc, HalfEdgeMesh* delaunay, VoronoiDiag
         if (height < 1) height = 1;
     }
 
-    PpmImage img = ppm::new_ppm(alloc, width, height)!!;
+    PpmImage img = ppm::new_ppm(alloc, width, height)!;
     defer catch img.destroy();
     ppm::fill(&img, copts.bg_color);
 
