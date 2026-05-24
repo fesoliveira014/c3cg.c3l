@@ -796,16 +796,63 @@ The milestones are ordered so that each builds only on what came before. The dep
 - [ ] `test/test_*` for each of the above.
 - [ ] `c3c build && c3c test` green.
 
-### Optional / later milestones
+### M15 — Constrained Delaunay
 
-Not on the v1 critical path:
+Add edge constraints to the Bowyer–Watson pipeline so callers can specify required edges that must appear in the triangulation.
 
-- Constrained Delaunay (with edge constraints).
-- Robust adaptive predicates (Shewchuk-style).
-- Non-convex bounding polygons in `voronoi::in_polygon`.
-- Catmull–Clark subdivision (requires quad-aware half-edge support — would not require deep changes since faces are already arbitrary cycles, but does require adding quad-only assumptions where Loop assumed triangles).
-- Half-edge collapse / split (mesh simplification primitives).
-- 3D Delaunay (tetrahedralisation) and 3D volumetric Voronoi.
+- [ ] `src/delaunay/constrained.c3` — `constrained_delaunay(sites, constraints)` where `constraints` is a `pair<VertexIndex>[2]` array of required edges. Edge recovery by edge-flipping or cavity retriangulation around the constraint.
+- [ ] Faults: `CROSSING_CONSTRAINTS`, `DUPLICATE_CONSTRAINT`, `EMPTY_INPUT`.
+- [ ] `test/test_delaunay_constrained.c3` — simple polygon as Delaunay with its edges constrained; crossing constraints fault; duplicate fault; verify constrained edges present in output mesh.
+- [ ] `c3c build && c3c test` green.
+
+### M16 — Robust adaptive predicates
+
+Replace the v1 non-robust geometry predicates with adaptive Shewchuk-style exact arithmetic.
+
+- [ ] `src/geometry/robust.c3` — `orient_2d_robust`, `in_circle_2d_robust`, `on_sphere_robust` using adaptive precision with expansion arithmetic. Fall through from fast float → exact if result is ambiguous.
+- [ ] `test/test_geometry_robust.c3` — near-degenerate inputs that trip up the non-robust versions produce correct signs with the robust versions; standard test suite from Shewchuk's predicates.c.
+- [ ] Existing algorithm modules (`delaunay_2d.c3`, `hull*.c3`) optionally swap to robust predicates behind a compile-time flag (`$if ROBUST_PREDICATES`).
+- [ ] `c3c build && c3c test` green (with and without the flag).
+
+### M17 — Non-convex bounding polygons in voronoi::in_polygon
+
+Lift the convex-only restriction on bounding polygons so `in_polygon` accepts simple (possibly non-convex) polygons.
+
+- [ ] `src/voronoi/bounded.c3` — extend `in_polygon` clipping to handle non-convex regions. Strategy: decompose the non-convex polygon into convex sub-polygons (ear clipping, already available from M14), clip each Voronoi cell against each sub-polygon, and union the per-cell results into a single face.
+- [ ] Remove or relax `NON_CONVEX_BOUNDING_POLYGON` fault.
+- [ ] `test/test_voronoi_bounded.c3` — add non-convex bounding polygon cases: L-shaped polygon, star-shaped polygon; verify cells are correctly clipped to the bounding shape.
+- [ ] `c3c build && c3c test` green.
+
+### M18 — Catmull–Clark subdivision
+
+Add Catmull–Clark subdivision as a counterpart to Loop subdivision, targeting quad-dominant meshes.
+
+- [ ] `src/subdivide/catmull_clark.c3` — `catmull_clark(mesh)` producing a new `HalfEdgeMesh`. Compute face points (centroids of polygonal faces), edge points (average of incident face points and edge endpoints), and new vertex positions (weighted blend of original vertex, incident face points, and incident edge points). Output all-quad mesh from an arbitrary polygonal input.
+- [ ] Faults: `EMPTY_INPUT`, `NON_MANIFOLD_INPUT`.
+- [ ] `test/test_subdivide_catmull_clark.c3` — subdivide a cube: verify face count quadruples, all output faces are quads, limit-surface tangency for a known case; round-trip with a single-quad input.
+- [ ] `c3c build && c3c test` green.
+
+### M19 — Half-edge collapse / split (mesh simplification)
+
+Add local mesh-simplification primitives: edge collapse and vertex split.
+
+- [ ] `src/half_edge/collapse.c3` — `collapse(he)` removing an edge and merging its two vertices, updating all affected topology. Returns an optional fault. Preserves manifold property when possible.
+- [ ] `src/half_edge/split.c3` — `split(he)` inserting a new vertex at the midpoint of a half-edge, splitting the incident face(s).
+- [ ] Faults: `COLLAPSE_NOT_ALLOWED` (would produce non-manifold or degenerate geometry), `BOUNDARY_HALF_EDGE`.
+- [ ] `test/test_collapse.c3` — collapse an interior edge on a tetrahedron, verify vertex/face counts, Euler characteristic; collapse that would produce a non-manifold faults.
+- [ ] `test/test_split.c3` — split an edge on a tetrahedron, verify new vertex and face counts; split a boundary edge.
+- [ ] `c3c build && c3c test` green.
+
+### M20 — 3D Delaunay (tetrahedralisation) and 3D volumetric Voronoi
+
+Extend Delaunay and Voronoi to 3D, producing tetrahedral meshes and volumetric Voronoi cells.
+
+- [ ] `src/delaunay/delaunay_3d.c3` — Bowyer–Watson in 3D: 3D super-tetrahedron, point insertion, cavity identified by circumsphere test (`in_sphere_3d` predicate), cavity retriangulated into tetrahedra. Output: tetrahedral `HalfEdgeMesh` (all faces degree-3, closed, no boundary). May reuse `HalfEdgeMesh` with the understanding that faces are now volume-bounding triangles; interior tetrahedra require a parallel tet array or a second-mesh approach.
+- [ ] `src/geometry/predicates_3d.c3` — `in_sphere_3d(a, b, c, d, p)` for the 3D Delaunay predicate.
+- [ ] `src/voronoi/voronoi_3d.c3` — `VoronoiDiagram3D` struct with a 3D dual; each Voronoi cell is a convex polyhedron. CSR or mesh-based storage. `from_delaunay_3d`, `to_delaunay_3d` via 3D dual.
+- [ ] `test/test_delaunay_3d.c3` — a cube's 8 corners as input produce a valid tetrahedralisation, all input vertices present, no degenerate tets, Delaunay condition holds for random interior points.
+- [ ] `test/test_voronoi_3d.c3` — Voronoi from a known tetrahedralisation round-trips; cell volume sum equals bounding volume.
+- [ ] `c3c build && c3c test` green.
 
 ---
 

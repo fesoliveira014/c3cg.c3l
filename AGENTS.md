@@ -187,7 +187,7 @@ One logical change per commit. Run `c3c build debug && c3c test` before committi
 Full architecture, API patterns, and milestone plan: `docs/architecture.md` (r3).
 C3 bindings conventions: `docs/bindings_guidelines.md`.
 
-## Development Plan (14 Milestones)
+## Development Plan (20 Milestones)
 
 | Milestone | What                                                         | Status      |
 | --------- | ------------------------------------------------------------ | ----------- |
@@ -205,7 +205,13 @@ C3 bindings conventions: `docs/bindings_guidelines.md`.
 | M11       | Bounded Voronoi (in_polygon, in_box)                         | ✅ Complete |
 | M12       | Spherical Delaunay + Voronoi                                 | ✅ Complete |
 | M13       | Voronoi/Delaunay graph views                                 | ✅ Complete |
-| M14       | Polygon triangulation, Loop subdivision, primitives          | ✅ Complete |
+| M14       | Polygon triangulation, Loop subdivision, primitives          | ✅ Complete  |
+| M15       | Constrained Delaunay (with edge constraints)                 | Not started  |
+| M16       | Robust adaptive predicates (Shewchuk-style)                  | Not started  |
+| M17       | Non-convex bounding polygons in voronoi::in_polygon          | Not started  |
+| M18       | Catmull–Clark subdivision                                    | Not started  |
+| M19       | Half-edge collapse / split (mesh simplification)             | Not started  |
+| M20       | 3D Delaunay (tetrahedralisation) and 3D volumetric Voronoi   | Not started  |
 
 Each milestone = commit(s) with tests. `c3c build && c3c test` green at every boundary.
 
