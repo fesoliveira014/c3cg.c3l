@@ -180,6 +180,8 @@ struct DelaunayGraph {
 Conventional Commits format: `<scope>: <imperative summary>` (e.g. `half_edge: add flip operation (M4)`).
 One logical change per commit. Run `c3c build debug && c3c test` before committing.
 
+**Never commit plans or specs unless explicitly directed by the user.** `docs/plans/` and `docs/specs/` are gitignored on purpose — always use those directories when planning and speccing, but do not `git add` them.
+
 ## Documentation
 
 Full architecture, API patterns, and milestone plan: `docs/architecture.md` (r3).
