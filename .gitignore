@@ -2,3 +2,6 @@ out/
 .worktrees/
 /tools
 /triangulate
+docs/plans/
+docs/specs/
+.*/
