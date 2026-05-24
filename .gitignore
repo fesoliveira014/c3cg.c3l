@@ -6,5 +6,4 @@ docs/plans/
 docs/specs/
 .pi/
 .superpowers/
-.claude//.claude/
-/.superpowers/
+.claude/
