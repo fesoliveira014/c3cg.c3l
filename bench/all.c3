@@ -25,7 +25,7 @@ const int[] GRAPH_SIZES     = { 100, 500, 1000 };
 const int[] BOUNDED_SIZES   = { 25, 50, 100, 200 };
 const int[] HULL_3D_SIZES   = { 100, 500, 1000, 2000 };
 const int[] POLYGON_SIZES   = { 10, 50, 100, 200 };
-const int[] SUBDIV_LEVELS   = { 0, 1, 2, 3 };
+const int[] SUBDIV_LEVELS   = { 0, 1, 2, 3, 4, 5, 6 };
 const int[] SPHERE_SIZES    = { 100, 500, 1000 };
 
 fn uint bench_hash(uint x)
