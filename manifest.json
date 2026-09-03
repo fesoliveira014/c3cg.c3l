@@ -1,23 +1,6 @@
 {
   "provides" : "c3cg",
-  "sources" : [
-    "src/c3cg.c3i",
-    "src/types.c3i",
-    "src/faults.c3i",
-    "src/half_edge_mesh.c3i",
-    "src/half_edge/builder.c3",
-    "src/half_edge/topology.c3",
-    "src/half_edge/walks.c3",
-    "src/half_edge/validate.c3",
-    "src/half_edge/flip.c3",
-    "src/geometry/predicates.c3",
-    "src/geometry/circumcenter.c3",
-    "src/geometry/centroid.c3",
-    "src/render/rendering_data.c3",
-    "src/render/geometry.c3",
-    "src/render/normals.c3",
-    "src/render/uvs.c3"
-  ],
+  "sources" : [ "src/**" ],
   "linklib-dir" : "linked-libs",
   "targets" : {
     "android-aarch64" : {
