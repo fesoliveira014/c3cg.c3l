@@ -2,7 +2,7 @@
 
 C3 library (`c3cg.c3l`) providing Delaunay triangulation, Voronoi diagrams, convex hull, polygon triangulation, mesh subdivision, and edge operations — all built on a single flat-array `HalfEdgeMesh` data structure.
 
-Targets C3 0.8.0. Source lives under `src/`.
+Targets C3 0.8.5_1. Source lives under `src/`.
 
 ## Build & Test
 

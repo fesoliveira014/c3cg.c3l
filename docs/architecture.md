@@ -4,7 +4,7 @@
 
 A computational-geometry library for C3, organised around a flat-array half-edge mesh that doubles as both triangulation and Voronoi representation, with operations layered as submodules. This document is both the architectural reference and the executable plan: design decisions here should not be re-litigated during implementation, and §7's milestone checklist is the order of work.
 
-The library targets C3 0.8.0 (pinned in `.claude/c3-skill.json`). Style follows the c3vq style guide attached to this project — `snake_case` for functions and variables, `PascalCase` for types, `SCREAMING_SNAKE_CASE` for constants, granular faults instead of `null`/sentinels, no runtime `assert` in production code.
+The library targets C3 0.8.5_1 (pinned in `.claude/c3-skill.json`). Style follows the c3vq style guide attached to this project — `snake_case` for functions and variables, `PascalCase` for types, `SCREAMING_SNAKE_CASE` for constants, granular faults instead of `null`/sentinels, no runtime `assert` in production code.
 
 > **Revision note.** This is r3 of the design. r1 placed `HalfEdgeMesh` under `cg::half_edge` and used a bespoke CSR `VoronoiDiagram`; r2 lifted the type into `cg`, made the half-edge mesh polygonal-capable, defined a generic dual operation, and represented Voronoi as a polygonal `HalfEdgeMesh` + parallel `sites` array. r3 adds flat graph views — `VoronoiGraph` and `DelaunayGraph` (in `cg::graph`) — over the existing mesh-based representations, for callers who want denormalised per-cell or per-triangle access without walking half-edges.
 
